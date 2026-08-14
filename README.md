@@ -114,7 +114,7 @@ omarchy plugin remove robzolkos.github
 
 Activity sections show five items initially and expand to a bounded list of 25. **Open in GitHub** takes you to the corresponding complete GitHub view where one is available.
 
-The notifications footer also carries **Mark all read**. The first click arms it and the label becomes **Confirm?**; only the second click sends the request. The confirmation lapses after a few seconds, when the panel closes, and whenever another mark is already running. The request is bounded by the newest thread on screen, so anything GitHub received after the last refresh stays unread. Large inboxes are processed asynchronously by GitHub, so an immediate refresh can briefly show threads that are already on their way out.
+The notifications footer also carries **Mark all read**. The first click captures the displayed notification snapshot and changes the label to **Confirm?**; only the second click sends the request. The confirmation lapses after a few seconds, when the panel closes, when a refresh changes the notification list, and whenever another mark is running. Notifications before the newest displayed second are handled in bulk, while displayed threads from that boundary second are marked by ID so same-second arrivals stay unread. The dashboard refreshes from GitHub after every attempt; large inboxes processed asynchronously may briefly retain threads that are already on their way out.
 
 ## Repository dashboard
 
@@ -155,6 +155,7 @@ From an existing checkout, validate and test the plugin:
 omarchy plugin validate .
 tests/helper-test.sh
 tests/panel-source-test.sh
+tests/service-source-test.sh
 ```
 
 Install that checkout for local iteration:

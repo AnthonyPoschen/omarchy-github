@@ -81,7 +81,7 @@ Panel {
     openUrl(selectedTarget.row.url)
   }
   function markSelectedRead() {
-    if (github.marking) return
+    if (github.loading || github.marking) return
     if (selectedTarget && selectedTarget.kind === "notification") github.markNotificationRead(String(selectedTarget.row.id || ""))
   }
   function scrollItemIntoView(item) {
@@ -264,6 +264,7 @@ Panel {
             visible: github.notificationActionStatus !== ""
             width: parent.width
             text: github.notificationActionStatus
+            textFormat: Text.PlainText
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
@@ -291,6 +292,7 @@ Panel {
                 if (github.warnings.length > 1) summary += " · " + (github.warnings.length - 1) + " more"
                 return summary
               }
+              textFormat: Text.PlainText
               color: github.state === "ready" ? root.dim : root.urgent
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
@@ -310,9 +312,11 @@ Panel {
             delegateComponent: notificationDelegate
             actionText: "Mark all read"
             actionBusyText: "Marking…"
-            actionEnabled: github.state === "ready"
+            actionEnabled: github.state === "ready" && !github.loading
             actionBusy: github.marking
-            onActionTriggered: github.markAllNotificationsRead()
+            actionRevision: github.notificationsRevision
+            actionPrepare: function() { return github.prepareMarkAllNotificationsRead() }
+            onActionTriggered: function(prepared) { github.markAllNotificationsRead(prepared) }
           }
 
           DashboardSection {
@@ -610,15 +614,23 @@ Panel {
     property bool actionEnabled: false
     property bool actionBusy: false
     property bool actionArmed: false
+    property int actionRevision: 0
+    property var actionPrepare: null
+    property string preparedAction: ""
     signal toggleExpanded()
-    signal actionTriggered()
+    signal actionTriggered(string prepared)
 
-    function disarmAction() { section.actionArmed = false; actionArmTimer.stop() }
+    function disarmAction() {
+      section.actionArmed = false
+      section.preparedAction = ""
+      actionArmTimer.stop()
+    }
 
     // An armed confirmation must not outlive the button being clickable, or it
     // would fire on the first click once the button comes back.
     onActionBusyChanged: if (section.actionBusy) section.disarmAction()
     onActionEnabledChanged: if (!section.actionEnabled) section.disarmAction()
+    onActionRevisionChanged: if (section.actionArmed) section.disarmAction()
 
     width: parent ? parent.width : 0
     spacing: Style.space(8)
@@ -688,9 +700,17 @@ Panel {
         verticalPadding: Style.spacing.controlPaddingY
         onClicked: {
           if (section.actionBusy) return
-          if (!section.actionArmed) { section.actionArmed = true; actionArmTimer.restart(); return }
+          if (!section.actionArmed) {
+            var prepared = section.actionPrepare ? String(section.actionPrepare() || "") : "confirmed"
+            if (prepared === "") return
+            section.preparedAction = prepared
+            section.actionArmed = true
+            actionArmTimer.restart()
+            return
+          }
+          var confirmed = section.preparedAction
           section.disarmAction()
-          section.actionTriggered()
+          section.actionTriggered(confirmed)
         }
       }
       Button {
@@ -777,7 +797,7 @@ Panel {
       }
       PanelActionButton {
         visible: linkRow.showReadAction
-        enabled: !github.marking
+        enabled: !github.loading && !github.marking
         iconText: github.markingNotificationId === linkRow.notificationId ? "󰑐" : "󰄬"
         tooltipText: "Mark this notification read (M)"
         foreground: root.foreground

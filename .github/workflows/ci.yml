@@ -30,3 +30,6 @@ jobs:
 
       - name: Run panel source tests
         run: tests/panel-source-test.sh
+
+      - name: Run service source tests
+        run: tests/service-source-test.sh

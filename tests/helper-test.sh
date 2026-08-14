@@ -13,6 +13,12 @@ if "$HELPER" --failed-days 0 >/dev/null 2>&1; then fail "invalid failed window s
 if "$HELPER" --mark-notification-read nope >/dev/null 2>&1; then fail "invalid notification id succeeded"; fi
 if "$HELPER" --mark-all-read-before nope >/dev/null 2>&1; then fail "invalid last-read timestamp succeeded"; fi
 if "$HELPER" --mark-all-read-before 2026-01-03 >/dev/null 2>&1; then fail "date without time succeeded"; fi
+if "$HELPER" --mark-all-read-before 2026-02-30T00:00:00Z --mark-boundary-notification 123 >/dev/null 2>&1; then fail "invalid calendar timestamp succeeded"; fi
+if "$HELPER" --mark-all-read-before 9999-01-01T00:00:00Z --mark-boundary-notification 123 >/dev/null 2>&1; then fail "future timestamp succeeded"; fi
+near_future=$(jq -nr 'now + 60 | todateiso8601')
+if "$HELPER" --mark-all-read-before "$near_future" --mark-boundary-notification 123 >/dev/null 2>&1; then fail "near-future timestamp succeeded"; fi
+if "$HELPER" --mark-all-read-before 2020-01-03T00:00:00Z >/dev/null 2>&1; then fail "bulk mark without a boundary notification succeeded"; fi
+if "$HELPER" --mark-all-read-before 2020-01-03T00:00:00Z --mark-boundary-notification nope >/dev/null 2>&1; then fail "invalid boundary notification id succeeded"; fi
 
 sandbox=$(mktemp -d)
 trap 'rm -rf "$sandbox"' EXIT
@@ -36,12 +42,16 @@ cat >"$sandbox/gh" <<'GH'
 #!/usr/bin/env bash
 if [[ $1 == auth ]]; then exit 0; fi
 if [[ $1 == api && $2 == --method && $3 == PATCH ]]; then
-  [[ $4 == /notifications/threads/123 ]] || exit 9
+  printf '%s\n' "$*" >>"$GH_TEST_LOG"
+  id=${4##*/}
+  [[ $id == 123 || $id == 124 || $id == 125 ]] || exit 9
+  if [[ ${GH_FAIL_PATCH_ID:-} == "$id" ]]; then echo "boundary patch rejected ghp_abcdefghijklmnopqrstuvwxyz123456" >&2; exit 8; fi
   printf '%s\n' '{}'; exit 0
 fi
 if [[ $1 == api && $2 == --method && $3 == PUT ]]; then
+  printf '%s\n' "$*" >>"$GH_TEST_LOG"
   [[ $4 == /notifications ]] || exit 9
-  [[ $5 == -f && $6 == last_read_at=2026-01-03T00:00:00Z ]] || { echo "unexpected last_read_at: ${6-}" >&2; exit 9; }
+  [[ $5 == -f && $6 == last_read_at=2020-01-02T23:59:59Z ]] || { echo "unexpected last_read_at: ${6-}" >&2; exit 9; }
   printf '%s\n' '{}'; exit 0
 fi
 if [[ $1 == api && $2 == graphql ]]; then
@@ -135,14 +145,52 @@ out_archived=$(PATH="$sandbox:$PATH" "$HELPER" --action-scan off --include-archi
 assert_jq '.myPullRequests|length == 2' "$out_archived" "authored pull requests survive the archived setting"
 grep -q 'author:@me' "$GH_TEST_LOG" || fail "authored pull request search did not run"
 if grep -q 'archived:false' "$GH_TEST_LOG"; then fail "archived filter applied despite --include-archived true"; fi
+: >"$GH_TEST_LOG"
 mark=$(PATH="$sandbox:$PATH" "$HELPER" --mark-notification-read 123)
 assert_jq '.state == "ready" and .notificationId == "123"' "$mark" "mark notification read"
-mark_all=$(PATH="$sandbox:$PATH" "$HELPER" --mark-all-read-before 2026-01-03T00:00:00Z)
-assert_jq '.state == "ready" and .lastReadAt == "2026-01-03T00:00:00Z"' "$mark_all" "mark all notifications read"
+: >"$GH_TEST_LOG"
+mark_all=$(PATH="$sandbox:$PATH" "$HELPER" --mark-all-read-before 2020-01-03T00:00:00Z --mark-boundary-notification 123 --mark-boundary-notification 124)
+assert_jq '.state == "ready" and .lastReadAt == "2020-01-03T00:00:00Z"' "$mark_all" "mark all notifications read"
+mapfile -t mark_calls <"$GH_TEST_LOG"
+[[ ${#mark_calls[@]} -eq 3 ]] || fail "bulk mark made an unexpected number of API calls"
+[[ ${mark_calls[0]} == 'api --method PUT /notifications -f last_read_at=2020-01-02T23:59:59Z' ]] || fail "bulk mark did not stop before the boundary second"
+[[ ${mark_calls[1]} == 'api --method PATCH /notifications/threads/123' && ${mark_calls[2]} == 'api --method PATCH /notifications/threads/124' ]] || fail "bulk mark did not patch exactly the confirmed boundary notifications"
+: >"$GH_TEST_LOG"
+set +e
+mark_partial=$(GH_FAIL_PATCH_ID=124 PATH="$sandbox:$PATH" "$HELPER" --mark-all-read-before 2020-01-03T00:00:00Z --mark-boundary-notification 123 --mark-boundary-notification 124 --mark-boundary-notification 125)
+mark_partial_status=$?
+set -e
+[[ $mark_partial_status -eq 1 ]] || fail "partial boundary failure returned status $mark_partial_status"
+assert_jq '.state == "error" and .notificationId == "124" and (.message|test("boundary patch rejected")) and (.message|contains("ghp_")|not) and (.message|contains("[REDACTED]"))' "$mark_partial" "partial boundary failure reports the failing notification without exposing credentials"
+mapfile -t partial_calls <"$GH_TEST_LOG"
+[[ ${#partial_calls[@]} -eq 3 && ${partial_calls[0]} == 'api --method PUT /notifications -f last_read_at=2020-01-02T23:59:59Z' && ${partial_calls[1]} == 'api --method PATCH /notifications/threads/123' && ${partial_calls[2]} == 'api --method PATCH /notifications/threads/124' ]] || fail "partial boundary failure did not stop at the failing notification"
 # A rejected request must surface as an error payload rather than an empty
 # response, which is what a missing notifications scope looks like in practice.
-mark_all_failed=$(PATH="$sandbox:$PATH" "$HELPER" --mark-all-read-before 2020-01-01T00:00:00Z) || true
+set +e
+mark_all_failed=$(PATH="$sandbox:$PATH" "$HELPER" --mark-all-read-before 2020-01-01T00:00:00Z --mark-boundary-notification 123)
+mark_all_failed_status=$?
+set -e
+[[ $mark_all_failed_status -eq 1 ]] || fail "failed bulk mark returned status $mark_all_failed_status"
 assert_jq '.state == "error" and .lastReadAt == "2020-01-01T00:00:00Z"' "$mark_all_failed" "failed mark all reports an error"
+
+mkdir "$sandbox/failbin"
+cat >"$sandbox/failbin/mktemp" <<'SH'
+#!/usr/bin/env bash
+exit 1
+SH
+chmod +x "$sandbox/failbin/mktemp"
+set +e
+mark_setup_failed=$(PATH="$sandbox/failbin:$sandbox:$PATH" "$HELPER" --mark-notification-read 123)
+mark_setup_status=$?
+bulk_setup_failed=$(PATH="$sandbox/failbin:$sandbox:$PATH" "$HELPER" --mark-all-read-before 2020-01-03T00:00:00Z --mark-boundary-notification 123)
+bulk_setup_status=$?
+fetch_setup_failed=$(PATH="$sandbox/failbin:$sandbox:$PATH" "$HELPER")
+fetch_setup_status=$?
+set -e
+[[ $mark_setup_status -eq 1 && $bulk_setup_status -eq 1 && $fetch_setup_status -eq 1 ]] || fail "temporary-storage failures returned an unexpected status"
+assert_jq '.state == "error" and .notificationId == "123"' "$mark_setup_failed" "single mark setup failure reports an error"
+assert_jq '.state == "error" and .lastReadAt == "2020-01-03T00:00:00Z"' "$bulk_setup_failed" "bulk mark setup failure reports an error"
+assert_jq '.state == "error"' "$fetch_setup_failed" "refresh setup failure reports an error"
 
 # The Actions scan runs in xargs subshells, which only see exported functions.
 # An unexported helper there degrades every warning to the generic fallback
