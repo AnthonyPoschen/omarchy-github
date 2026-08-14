@@ -5,7 +5,7 @@
   "version": "0.2.2",
   "author": "Rob Zolkos",
   "license": "MIT",
-  "description": "A keyboard-friendly GitHub inbox for notifications, reviews, assigned issues, Actions, and owned repositories.",
+  "description": "A keyboard-friendly GitHub inbox for notifications, reviews, your own pull requests, assigned issues, Actions, and owned repositories.",
   "kinds": ["bar-widget"],
   "activation": "on-demand",
   "entryPoints": {
@@ -13,7 +13,7 @@
   },
   "barWidget": {
     "displayName": "GitHub",
-    "description": "Act on unread notifications and browse review requests, assigned issues, active or failed workflows, and repository metrics.",
+    "description": "Act on unread notifications and browse review requests, your authored pull requests with their check state, assigned issues, active or failed workflows, and repository metrics.",
     "category": "Development",
     "aliases": ["github", "octocat", "repos", "actions"],
     "allowMultiple": false,

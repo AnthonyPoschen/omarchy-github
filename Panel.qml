@@ -103,9 +103,9 @@ Panel {
 
   function checkLabel(checks) {
     if (checks === "SUCCESS") return "checks passing"
-    if (checks === "FAILURE") return "checks failing"
     if (checks === "ERROR") return "checks errored"
-    if (checks === "PENDING" || checks === "EXPECTED") return "checks running"
+    if (github.isBrokenCheck(checks)) return "checks failing"
+    if (github.isRunningCheck(checks)) return "checks running"
     return "no checks"
   }
 
@@ -235,8 +235,11 @@ Panel {
           PanelHero {
             width: parent.width
             title: github.login !== "" ? "GitHub · " + github.login : "GitHub"
+            // Mirrors every term of the alarming state, so the summary always
+            // explains why the bar icon is lit.
             meta: github.loading ? "Refreshing dashboard…" : (github.state === "ready" ?
-              github.unreadCount + " unread · " + github.reviewRequests.length + " reviews · " + github.actionCount + " active actions" : github.message)
+              github.unreadCount + " unread · " + github.reviewRequests.length + " reviews · " + github.actionCount + " active actions"
+                + (github.failingPullRequestCount > 0 ? " · " + github.failingPullRequestCount + " failing" : "") : github.message)
             foreground: root.foreground
             fontFamily: root.fontFamily
             iconComponent: Component {
@@ -314,7 +317,10 @@ Panel {
           DashboardSection {
             visible: count > 0
             title: "MY PULL REQUESTS"
-            count: github.myPullRequests.length
+            // The search is capped at one page, so the fetched list can be
+            // shorter than the real total. Show the total rather than implying
+            // the section is complete.
+            count: Math.max(github.myPullRequestsTotal, github.myPullRequests.length)
             model: root.sectionRows(github.myPullRequests, root.myPullsExpanded)
             expanded: root.myPullsExpanded
             openUrl: "https://github.com/pulls"
@@ -508,8 +514,8 @@ Panel {
       required property var modelData
       required property int index
       readonly property string checks: String(modelData.checks || "NONE")
-      readonly property bool broken: checks === "FAILURE" || checks === "ERROR"
-      readonly property bool running: checks === "PENDING" || checks === "EXPECTED"
+      readonly property bool broken: github.isBrokenCheck(checks)
+      readonly property bool running: github.isRunningCheck(checks)
       width: parent ? parent.width : 0
       rowKind: "mypull"
       rowIndex: index

@@ -18,6 +18,7 @@ Item {
     property var reviewRequests: []
     property var assignedIssues: []
     property var myPullRequests: []
+    property int myPullRequestsTotal: 0
     property var actions: []
     property var failedActions: []
     property var repositories: []
@@ -34,12 +35,25 @@ Item {
     readonly property int unreadCount: notifications.length
     readonly property int actionCount: actions.length
     // A broken check on your own pull request is the kind of thing the bar icon
-    // exists to surface, so it counts toward the alarming state.
+    // exists to surface, so it counts toward the alarming state. Drafts are
+    // excluded: a red check on work you have not offered up yet is expected,
+    // and it would leave the icon permanently lit.
     readonly property int failingPullRequestCount: myPullRequests.filter(function(item) {
-        var checks = String(item.checks || "");
-        return checks === "FAILURE" || checks === "ERROR";
+        return !item.draft && root.isBrokenCheck(item.checks);
     }).length
     readonly property bool alarming: unreadCount > 0 || actionCount > 0 || reviewRequests.length > 0 || failingPullRequestCount > 0
+
+    // StatusCheckRollup groupings live here so the alarming count, the row label
+    // and the row glyph cannot drift apart when a state is reclassified.
+    function isBrokenCheck(checks) {
+        var value = String(checks || "");
+        return value === "FAILURE" || value === "ERROR";
+    }
+
+    function isRunningCheck(checks) {
+        var value = String(checks || "");
+        return value === "PENDING" || value === "EXPECTED";
+    }
 
     function setting(name, fallback) {
         var value = settings ? settings[name] : undefined;
@@ -105,6 +119,7 @@ Item {
             reviewRequests = Array.isArray(data.reviewRequests) ? data.reviewRequests : [];
             assignedIssues = Array.isArray(data.assignedIssues) ? data.assignedIssues : [];
             myPullRequests = Array.isArray(data.myPullRequests) ? data.myPullRequests : [];
+            myPullRequestsTotal = Number(data.myPullRequestsTotal) || myPullRequests.length;
             actions = Array.isArray(data.actions) ? data.actions : [];
             failedActions = Array.isArray(data.failedActions) ? data.failedActions : [];
             repositories = Array.isArray(data.repositories) ? data.repositories : [];

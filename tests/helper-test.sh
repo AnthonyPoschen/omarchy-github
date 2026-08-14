@@ -43,7 +43,7 @@ if [[ $1 == api && $2 == graphql ]]; then
     # The second node carries no rollup, which must land as NONE rather than
     # being conflated with a pending run.
     cat <<'JSON'
-{"data":{"search":{"nodes":[{"number":7,"title":"Ship it","url":"https://github.com/octocat/hello/pull/7","updatedAt":"2026-01-05T00:00:00Z","isDraft":false,"repository":{"nameWithOwner":"octocat/hello"},"commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"FAILURE"}}}]}},{"number":9,"title":"No CI here","url":"https://github.com/octocat/quiet/pull/9","updatedAt":"2026-01-04T00:00:00Z","isDraft":true,"repository":{"nameWithOwner":"octocat/quiet"},"commits":{"nodes":[{"commit":{"statusCheckRollup":null}}]}}]}}}
+{"data":{"search":{"issueCount":2,"nodes":[{"number":7,"title":"Ship it","url":"https://github.com/octocat/hello/pull/7","updatedAt":"2026-01-05T00:00:00Z","isDraft":false,"repository":{"nameWithOwner":"octocat/hello"},"commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"FAILURE"}}}]}},{"number":9,"title":"No CI here","url":"https://github.com/octocat/quiet/pull/9","updatedAt":"2026-01-04T00:00:00Z","isDraft":true,"repository":{"nameWithOwner":"octocat/quiet"},"commits":{"nodes":[{"commit":{"statusCheckRollup":null}}]}}]}}}
 JSON
     exit 0
   fi
@@ -104,16 +104,16 @@ assert_jq '(.actions|length == 1) and (.failedActions|length == 1)' "$out" "acti
 assert_jq '.rateLimit.remaining == 4999 and (.warnings|length) == 0' "$out" "rate limit and warnings"
 assert_jq '(.myPullRequests|length == 2) and (.myPullRequests[0].id == "octocat/hello#7") and (.myPullRequests[0].checks == "FAILURE")' "$out" "authored pull requests with check rollup"
 assert_jq '(.myPullRequests[1].checks == "NONE") and (.myPullRequests[1].draft == true)' "$out" "missing rollup falls back to NONE"
+assert_jq '.myPullRequestsTotal == 2' "$out" "authored pull request total reported"
+grep -q 'author:@me.*sort:updated-desc' "$GH_TEST_LOG" || fail "authored pull request search was not server sorted"
 grep -q 'author:@me.*archived:false' "$GH_TEST_LOG" || fail "authored pull request search was not archive filtered"
-out_archived=$(PATH="$sandbox:$PATH" "$HELPER" --action-scan off --include-archived true)
-assert_jq '.myPullRequests|length == 2' "$out_archived" "authored pull requests survive the archived setting"
 grep -q -- '--paginate.*status=queued' "$GH_TEST_LOG" || fail "queued Actions request was not paginated"
 grep -q 'status=completed.*created=%3E%3D' "$GH_TEST_LOG" || fail "completed Actions request was not date bounded"
 grep -q 'review-requested%3A%40me+draft%3Afalse+archived%3Afalse' "$GH_TEST_LOG" || fail "review request search was not draft and archive filtered"
 grep -q 'assignee%3A%40me+archived%3Afalse' "$GH_TEST_LOG" || fail "assigned issue search was not archive filtered"
 : >"$GH_TEST_LOG"
-out_archived=$(PATH="$sandbox:$PATH" "$HELPER" --action-scan off --include-archived-reviews true)
-assert_jq '(.reviewRequests|length == 1) and (.assignedIssues|length == 1)' "$out_archived" "searches still return with archived included"
+out_archived_reviews=$(PATH="$sandbox:$PATH" "$HELPER" --action-scan off --include-archived-reviews true)
+assert_jq '(.reviewRequests|length == 1) and (.assignedIssues|length == 1)' "$out_archived_reviews" "searches still return with archived included"
 if grep -q 'archived%3Afalse' "$GH_TEST_LOG"; then fail "archived filter applied despite --include-archived-reviews true"; fi
 # The draft exclusion has its own setting, so it must survive the archived one.
 grep -q 'draft%3Afalse' "$GH_TEST_LOG" || fail "draft exclusion dropped when archived repositories are included"
@@ -122,6 +122,12 @@ out_drafts=$(PATH="$sandbox:$PATH" "$HELPER" --action-scan off --include-draft-r
 assert_jq '.reviewRequests|length == 1' "$out_drafts" "review requests still return with drafts included"
 if grep -q 'draft%3Afalse' "$GH_TEST_LOG"; then fail "draft filter applied despite --include-draft-reviews true"; fi
 grep -q 'archived%3Afalse' "$GH_TEST_LOG" || fail "archived filter dropped when drafts are included"
+# The repository-list archive setting independently controls authored PRs.
+: >"$GH_TEST_LOG"
+out_archived=$(PATH="$sandbox:$PATH" "$HELPER" --action-scan off --include-archived true)
+assert_jq '.myPullRequests|length == 2' "$out_archived" "authored pull requests survive the archived setting"
+grep -q 'author:@me' "$GH_TEST_LOG" || fail "authored pull request search did not run"
+if grep -q 'archived:false' "$GH_TEST_LOG"; then fail "archived filter applied despite --include-archived true"; fi
 mark=$(PATH="$sandbox:$PATH" "$HELPER" --mark-notification-read 123)
 assert_jq '.state == "ready" and .notificationId == "123"' "$mark" "mark notification read"
 
