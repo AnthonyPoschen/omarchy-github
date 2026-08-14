@@ -129,6 +129,7 @@ Configure the widget through Omarchy's bar widget settings:
 - Refresh interval
 - Include archived repositories
 - Include forks
+- Include review requests and issues from archived repositories
 - Maximum displayed repositories
 - Actions scan mode: off, recent repositories, or all repositories
 - Number of recent repositories to scan
@@ -136,6 +137,8 @@ Configure the widget through Omarchy's bar widget settings:
 - Failed Actions time window and maximum result count
 
 The defaults deliberately balance freshness and GitHub API usage. Accounts that need exhaustive workflow monitoring can select **All repositories**.
+
+Review requests and assigned issues in archived repositories are hidden by default. An archived repository is read-only, so the work cannot be done and the request cannot be withdrawn. Teams that still work in archived repositories can turn them back on.
 
 ## Local development
 

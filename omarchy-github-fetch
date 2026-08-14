@@ -5,6 +5,7 @@ set -uo pipefail
 
 include_archived=false
 include_forks=false
+include_archived_reviews=false
 action_scan="recent"
 action_limit=15
 concurrency=6
@@ -17,6 +18,9 @@ usage() {
 Usage: omarchy-github-fetch [options]
   --include-archived BOOL       Include archived repositories (default: false)
   --include-forks BOOL          Include repositories that are forks (default: false)
+  --include-archived-reviews BOOL
+                                Include review requests and assigned issues in
+                                archived repositories (default: false)
   --action-scan MODE            off, recent, or all (default: recent)
   --action-repo-limit N         Repositories scanned in recent mode (default: 15)
   --concurrency N               Concurrent Actions requests, 1-12 (default: 6)
@@ -33,6 +37,7 @@ while (($#)); do
   case "$1" in
     --include-archived) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; include_archived=$2; shift 2 ;;
     --include-forks) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; include_forks=$2; shift 2 ;;
+    --include-archived-reviews) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; include_archived_reviews=$2; shift 2 ;;
     --action-scan) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; action_scan=${2,,}; shift 2 ;;
     --action-repo-limit) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; action_limit=$2; shift 2 ;;
     --concurrency) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; concurrency=$2; shift 2 ;;
@@ -120,8 +125,11 @@ fetch_search() {
     jq -s '[.[] | .items[]? | {id:(.id|tostring),number,title:(.title // ""),repository:(.repository_url // "" | sub("^https://api.github.com/repos/";"")),url:(.html_url // ""),updatedAt:(.updated_at // ""),user:(.user.login // ""),draft:(.draft // false)}] | sort_by(.updatedAt) | reverse' "$pages" >"$output" 2>/dev/null || { printf '[]\n' >"$output"; printf '%s: invalid API response\n' "$label" >>"$warnings"; }
   else printf '[]\n' >"$output"; fi
 }
-fetch_search review-requests 'is%3Aopen+is%3Apr+review-requested%3A%40me' "$tmp/reviews.json"
-fetch_search assigned-issues 'is%3Aopen+is%3Aissue+assignee%3A%40me' "$tmp/issues.json"
+# An archived repository is read-only, so the request cannot be withdrawn and
+# the work cannot be done: it would otherwise be listed forever.
+if bool "$include_archived_reviews"; then search_archived=""; else search_archived="+archived%3Afalse"; fi
+fetch_search review-requests "is%3Aopen+is%3Apr+review-requested%3A%40me$search_archived" "$tmp/reviews.json"
+fetch_search assigned-issues "is%3Aopen+is%3Aissue+assignee%3A%40me$search_archived" "$tmp/issues.json"
 
 cursor=null
 printf '[]\n' >"$tmp/repos.json"
