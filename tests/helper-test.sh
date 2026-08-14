@@ -11,6 +11,8 @@ bash -n "$HELPER"
 if "$HELPER" --action-scan invalid >/dev/null 2>&1; then fail "invalid scan mode succeeded"; fi
 if "$HELPER" --failed-days 0 >/dev/null 2>&1; then fail "invalid failed window succeeded"; fi
 if "$HELPER" --mark-notification-read nope >/dev/null 2>&1; then fail "invalid notification id succeeded"; fi
+if "$HELPER" --mark-all-read-before nope >/dev/null 2>&1; then fail "invalid last-read timestamp succeeded"; fi
+if "$HELPER" --mark-all-read-before 2026-01-03 >/dev/null 2>&1; then fail "date without time succeeded"; fi
 
 sandbox=$(mktemp -d)
 trap 'rm -rf "$sandbox"' EXIT
@@ -35,6 +37,11 @@ cat >"$sandbox/gh" <<'GH'
 if [[ $1 == auth ]]; then exit 0; fi
 if [[ $1 == api && $2 == --method && $3 == PATCH ]]; then
   [[ $4 == /notifications/threads/123 ]] || exit 9
+  printf '%s\n' '{}'; exit 0
+fi
+if [[ $1 == api && $2 == --method && $3 == PUT ]]; then
+  [[ $4 == /notifications ]] || exit 9
+  [[ $5 == -f && $6 == last_read_at=2026-01-03T00:00:00Z ]] || { echo "unexpected last_read_at: ${6-}" >&2; exit 9; }
   printf '%s\n' '{}'; exit 0
 fi
 if [[ $1 == api && $2 == graphql ]]; then
@@ -130,5 +137,11 @@ grep -q 'author:@me' "$GH_TEST_LOG" || fail "authored pull request search did no
 if grep -q 'archived:false' "$GH_TEST_LOG"; then fail "archived filter applied despite --include-archived true"; fi
 mark=$(PATH="$sandbox:$PATH" "$HELPER" --mark-notification-read 123)
 assert_jq '.state == "ready" and .notificationId == "123"' "$mark" "mark notification read"
+mark_all=$(PATH="$sandbox:$PATH" "$HELPER" --mark-all-read-before 2026-01-03T00:00:00Z)
+assert_jq '.state == "ready" and .lastReadAt == "2026-01-03T00:00:00Z"' "$mark_all" "mark all notifications read"
+# A rejected request must surface as an error payload rather than an empty
+# response, which is what a missing notifications scope looks like in practice.
+mark_all_failed=$(PATH="$sandbox:$PATH" "$HELPER" --mark-all-read-before 2020-01-01T00:00:00Z) || true
+assert_jq '.state == "error" and .lastReadAt == "2020-01-01T00:00:00Z"' "$mark_all_failed" "failed mark all reports an error"
 
 echo "helper tests passed"

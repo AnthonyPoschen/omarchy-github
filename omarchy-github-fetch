@@ -13,6 +13,7 @@ concurrency=6
 failed_days=7
 failed_limit=20
 mark_notification=""
+mark_all_before=""
 
 usage() {
   cat <<'EOF'
@@ -30,6 +31,9 @@ Usage: omarchy-github-fetch [options]
   --failed-days N               Show failed runs from the last N days, 1-30 (default: 7)
   --failed-limit N              Maximum recent failed runs, 1-100 (default: 20)
   --mark-notification-read ID   Mark one notification thread read and exit
+  --mark-all-read-before TIME   Mark every notification updated at or before
+                                TIME (ISO 8601 UTC, e.g. 2024-05-01T12:00:00Z)
+                                read and exit
 EOF
 }
 
@@ -48,6 +52,7 @@ while (($#)); do
     --failed-days) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; failed_days=$2; shift 2 ;;
     --failed-limit) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; failed_limit=$2; shift 2 ;;
     --mark-notification-read) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; mark_notification=$2; shift 2 ;;
+    --mark-all-read-before) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; mark_all_before=$2; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -71,6 +76,8 @@ fi
 command -v gh >/dev/null 2>&1 || { emit_state gh-not-installed "GitHub CLI is not installed or not on PATH."; exit 0; }
 gh auth status -h github.com >/dev/null 2>&1 || { emit_state logged-out "Sign in with gh auth login to load GitHub data."; exit 0; }
 
+error_detail() { tr '\n' ' ' <"$1" | sed 's/[[:space:]]\+/ /g;s/^ //;s/ $//' | cut -c1-240; }
+
 if [[ -n $mark_notification ]]; then
   if error=$(mktemp); then
     if gh api --method PATCH "/notifications/threads/$mark_notification" >/dev/null 2>"$error"; then
@@ -78,9 +85,28 @@ if [[ -n $mark_notification ]]; then
       jq -n --arg id "$mark_notification" '{state:"ready",message:"Notification marked read.",notificationId:$id}'
       exit 0
     fi
-    detail=$(tr '\n' ' ' <"$error" | sed 's/[[:space:]]\+/ /g;s/^ //;s/ $//' | cut -c1-240)
+    detail=$(error_detail "$error")
     rm -f "$error"
     jq -n --arg id "$mark_notification" --arg message "${detail:-Could not mark notification read.}" '{state:"error",message:$message,notificationId:$id}'
+    exit 1
+  fi
+fi
+
+# Marking everything read is scoped to a timestamp so threads that arrived
+# after the dashboard was last refreshed stay unread. GitHub defaults
+# last_read_at to the current time, which would silently clear notifications
+# the user never saw.
+if [[ -n $mark_all_before ]]; then
+  [[ $mark_all_before =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || { jq -n --arg at "$mark_all_before" '{state:"error",message:"Invalid last-read timestamp.",lastReadAt:$at}'; exit 2; }
+  if error=$(mktemp); then
+    if gh api --method PUT /notifications -f last_read_at="$mark_all_before" >/dev/null 2>"$error"; then
+      rm -f "$error"
+      jq -n --arg at "$mark_all_before" '{state:"ready",message:"All notifications marked read.",lastReadAt:$at}'
+      exit 0
+    fi
+    detail=$(error_detail "$error")
+    rm -f "$error"
+    jq -n --arg at "$mark_all_before" --arg message "${detail:-Could not mark all notifications read.}" '{state:"error",message:$message,lastReadAt:$at}'
     exit 1
   fi
 fi
@@ -91,7 +117,7 @@ warnings="$tmp/warnings"
 : >"$warnings"
 api_error() {
   local label=$1 err=$2 detail
-  detail=$(tr '\n' ' ' <"$err" | sed 's/[[:space:]]\+/ /g;s/^ //;s/ $//' | cut -c1-240)
+  detail=$(error_detail "$err")
   [[ -n $detail ]] || detail="request failed"
   printf '%s: %s\n' "$label" "$detail" >>"$warnings"
 }

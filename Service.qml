@@ -28,9 +28,11 @@ Item {
     property string _stderr: ""
     property bool refreshQueued: false
     property string markingNotificationId: ""
+    property bool markingAllNotifications: false
     property string notificationActionStatus: ""
     property string _markStdout: ""
     property string _markStderr: ""
+    property string _markBoundary: ""
     readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 900, 60, 3600)
     readonly property int unreadCount: notifications.length
     readonly property int actionCount: actions.length
@@ -145,6 +147,27 @@ Item {
         markProcess.running = true;
     }
 
+    // Bounded by the timestamp of the data on screen so threads that arrived
+    // since the last refresh are never cleared unseen.
+    function markAllNotificationsRead() {
+        if (notifications.length === 0 || markProcess.running)
+            return ;
+
+        var boundary = String(fetchedAt || "");
+        if (boundary === "") {
+            notificationActionStatus = "Refresh before marking everything read.";
+            actionStatusTimer.restart();
+            return ;
+        }
+        markingAllNotifications = true;
+        notificationActionStatus = "Marking all notifications read…";
+        _markStdout = "";
+        _markStderr = "";
+        _markBoundary = boundary;
+        markProcess.command = [helperPath(), "--mark-all-read-before", boundary];
+        markProcess.running = true;
+    }
+
     visible: false
 
     Timer {
@@ -211,16 +234,30 @@ Item {
                 response = JSON.parse(String(markOutput.text || root._markStdout || ""));
             } catch (error) {
             }
+            var all = root.markingAllNotifications;
             if (exitCode === 0 && response && response.state === "ready") {
-                var markedId = root.markingNotificationId;
-                root.notifications = root.notifications.filter(function(item) {
-                    return String(item.id || "") !== markedId;
-                });
-                root.notificationActionStatus = "Notification marked read.";
+                if (all) {
+                    // Drop only what the request covered; a refresh may have
+                    // landed newer threads while the helper was running.
+                    var boundary = root._markBoundary;
+                    root.notifications = root.notifications.filter(function(item) {
+                        return String(item.updatedAt || "") > boundary;
+                    });
+                    root.notificationActionStatus = "All notifications marked read.";
+                } else {
+                    var markedId = root.markingNotificationId;
+                    root.notifications = root.notifications.filter(function(item) {
+                        return String(item.id || "") !== markedId;
+                    });
+                    root.notificationActionStatus = "Notification marked read.";
+                }
             } else {
-                root.notificationActionStatus = response && response.message ? String(response.message) : String(markErrors.text || root._markStderr || "Could not mark notification read.").trim();
+                var fallback = all ? "Could not mark all notifications read." : "Could not mark notification read.";
+                root.notificationActionStatus = response && response.message ? String(response.message) : String(markErrors.text || root._markStderr || fallback).trim();
             }
             root.markingNotificationId = "";
+            root.markingAllNotifications = false;
+            root._markBoundary = "";
             actionStatusTimer.restart();
         }
 
