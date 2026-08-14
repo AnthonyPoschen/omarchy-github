@@ -379,7 +379,10 @@ Panel {
 
           PanelSectionHeader {
             width: parent.width
-            text: "OWNED REPOSITORIES  " + root.displayedRepositories.length + "/" + github.repositories.length
+            // The heading follows the scope actually fetched, not the setting,
+            // so it cannot claim to list organization repositories before a
+            // refresh has brought them in.
+            text: (github.repositoryScope === "owned" ? "OWNED REPOSITORIES  " : "REPOSITORIES  ") + root.displayedRepositories.length + "/" + github.repositories.length
             foreground: root.foreground
             fontFamily: root.fontFamily
           }

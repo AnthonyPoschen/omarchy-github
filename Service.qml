@@ -13,6 +13,7 @@ Item {
     property string state: "loading"
     property string message: "Loading GitHub…"
     property string login: ""
+    property string repositoryScope: "owned"
     property string fetchedAt: ""
     property var notifications: []
     property int notificationsRevision: 0
@@ -83,6 +84,13 @@ Item {
         return text === "true" || text === "yes" || text === "on" || text === "1";
     }
 
+    // The setting drives the next fetch; `repositoryScope` reports what the
+    // last payload actually contained, so the panel never labels the list
+    // before the data behind the label has arrived.
+    function repositoryScopeSetting() {
+        return String(setting("repositoryScope", "Owned")).toLowerCase().indexOf("organization") === -1 ? "owned" : "organizations";
+    }
+
     function actionMode() {
         var value = String(setting("actionScanBehavior", "Recent repositories")).toLowerCase();
         if (value === "off")
@@ -99,7 +107,7 @@ Item {
     }
 
     function command() {
-        return [helperPath(), "--include-archived", boolSetting("includeArchived", false) ? "true" : "false", "--include-forks", boolSetting("includeForks", false) ? "true" : "false", "--include-archived-reviews", boolSetting("includeArchivedReviewRequests", false) ? "true" : "false", "--include-draft-reviews", boolSetting("includeDraftReviewRequests", false) ? "true" : "false", "--action-scan", actionMode(), "--action-repo-limit", String(intSetting("actionScanRepoLimit", 15, 5, 200)), "--concurrency", String(intSetting("actionScanConcurrency", 6, 1, 12)), "--failed-days", String(intSetting("failedActionDays", 7, 1, 30)), "--failed-limit", String(intSetting("failedActionLimit", 20, 1, 100))];
+        return [helperPath(), "--include-archived", boolSetting("includeArchived", false) ? "true" : "false", "--include-forks", boolSetting("includeForks", false) ? "true" : "false", "--repository-scope", repositoryScopeSetting(), "--include-archived-reviews", boolSetting("includeArchivedReviewRequests", false) ? "true" : "false", "--include-draft-reviews", boolSetting("includeDraftReviewRequests", false) ? "true" : "false", "--action-scan", actionMode(), "--action-repo-limit", String(intSetting("actionScanRepoLimit", 15, 5, 200)), "--concurrency", String(intSetting("actionScanConcurrency", 6, 1, 12)), "--failed-days", String(intSetting("failedActionDays", 7, 1, 30)), "--failed-limit", String(intSetting("failedActionLimit", 20, 1, 100))];
     }
 
     function refresh() {
@@ -121,6 +129,7 @@ Item {
             state = String(data.state || "error");
             message = String(data.message || "");
             login = String(data.login || "");
+            repositoryScope = String(data.repositoryScope || "owned");
             fetchedAt = String(data.fetchedAt || "");
             notifications = Array.isArray(data.notifications) ? data.notifications : [];
             notificationsRevision++;

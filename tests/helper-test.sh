@@ -9,6 +9,7 @@ assert_jq() { jq -e "$1" <<<"$2" >/dev/null || fail "$3"; }
 bash -n "$HELPER"
 "$HELPER" --help >/dev/null
 if "$HELPER" --action-scan invalid >/dev/null 2>&1; then fail "invalid scan mode succeeded"; fi
+if "$HELPER" --repository-scope invalid >/dev/null 2>&1; then fail "invalid repository scope succeeded"; fi
 if "$HELPER" --failed-days 0 >/dev/null 2>&1; then fail "invalid failed window succeeded"; fi
 if "$HELPER" --mark-notification-read nope >/dev/null 2>&1; then fail "invalid notification id succeeded"; fi
 if "$HELPER" --mark-all-read-before nope >/dev/null 2>&1; then fail "invalid last-read timestamp succeeded"; fi
@@ -118,6 +119,7 @@ assert_jq '.notifications|length == 2 and .[0].url == "https://github.com/octoca
 assert_jq '.reviewRequests|length == 1 and .[0].repository == "octocat/hello"' "$out" "review requests"
 assert_jq '(.assignedIssues|length == 1) and (.assignedIssues[0].url|endswith("/issues/8"))' "$out" "assigned issues"
 assert_jq '(.actions|length == 1) and (.failedActions|length == 1)' "$out" "active and failed actions separated"
+assert_jq '.repositoryScope == "owned"' "$out" "default repository scope reported"
 assert_jq '.rateLimit.remaining == 4999 and (.warnings|length) == 0' "$out" "rate limit and warnings"
 assert_jq '(.myPullRequests|length == 2) and (.myPullRequests[0].id == "octocat/hello#7") and (.myPullRequests[0].checks == "FAILURE")' "$out" "authored pull requests with check rollup"
 assert_jq '(.myPullRequests[1].checks == "NONE") and (.myPullRequests[1].draft == true)' "$out" "missing rollup falls back to NONE"
@@ -191,6 +193,18 @@ set -e
 assert_jq '.state == "error" and .notificationId == "123"' "$mark_setup_failed" "single mark setup failure reports an error"
 assert_jq '.state == "error" and .lastReadAt == "2020-01-03T00:00:00Z"' "$bulk_setup_failed" "bulk mark setup failure reports an error"
 assert_jq '.state == "error"' "$fetch_setup_failed" "refresh setup failure reports an error"
+
+# Each scope run truncates the log first, so the greps below read only the run
+# they belong to rather than an earlier one that used the other affiliation.
+: >"$GH_TEST_LOG"
+out_owned=$(PATH="$sandbox:$PATH" "$HELPER" --action-scan off)
+assert_jq '.repositoryScope == "owned"' "$out_owned" "default repository scope reported"
+grep -q 'ownerAffiliations:OWNER,' "$GH_TEST_LOG" || fail "default scope did not query owned repositories"
+: >"$GH_TEST_LOG"
+out_scoped=$(PATH="$sandbox:$PATH" "$HELPER" --action-scan off --repository-scope organizations)
+assert_jq '.repositoryScope == "organizations"' "$out_scoped" "organization scope reported"
+grep -q 'ownerAffiliations:\[OWNER,ORGANIZATION_MEMBER\],' "$GH_TEST_LOG" || fail "organization scope did not reach the query"
+if grep -q 'ownerAffiliations:OWNER,' "$GH_TEST_LOG"; then fail "owned affiliation used despite the organization scope"; fi
 
 # The Actions scan runs in xargs subshells, which only see exported functions.
 # An unexported helper there degrades every warning to the generic fallback

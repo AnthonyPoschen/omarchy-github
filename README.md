@@ -16,7 +16,7 @@ The dashboard is ordered by urgency so the most actionable work appears first:
 - **Assigned issues** — keep track of open issues assigned to you
 - **Active GitHub Actions** — monitor queued, pending, requested, waiting, and running workflows
 - **Recent workflow failures** — jump directly to failed, timed-out, or action-required runs
-- **Owned repositories** — browse every repository you own with open issue, open PR, star, and active workflow counts
+- **Repositories** — browse the repositories you own, and optionally those you reach through an organization, with open issue, open PR, star, and active workflow counts
 
 Repository search, metric filters, and sorting make even large GitHub accounts manageable. Filter to repositories with issues, PRs, stars, or active Actions, then sort by the metric that matters.
 
@@ -135,6 +135,7 @@ Configure the widget through Omarchy's bar widget settings:
 - Refresh interval
 - Include archived repositories
 - Include forks
+- Repository scope: owned repositories, or owned and organization repositories
 - Include review requests and issues from archived repositories
 - Include review requests on drafts
 - Maximum displayed repositories
@@ -170,7 +171,7 @@ The shell watches local plugin files, making QML iteration fast.
 
 `Service.qml` schedules an executable helper, `omarchy-github-fetch`, which calls GitHub exclusively through `gh api` and processes responses with `jq`.
 
-- GraphQL retrieves every owned repository and exact aggregate counts.
+- GraphQL retrieves every repository in the configured scope and exact aggregate counts.
 - REST retrieves notifications and workflow runs.
 - GitHub issue search retrieves review requests and assigned issues.
 - GraphQL search retrieves your authored pull requests together with the head commit's `statusCheckRollup`, so check state costs no extra request.
