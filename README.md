@@ -4,6 +4,8 @@ Your GitHub work, directly in the Omarchy bar.
 
 **Omarchy GitHub** turns the Octocat in your bar into a fast, keyboard-friendly command center for everything that needs your attention—without keeping another browser tab open.
 
+![Omarchy GitHub dashboard showing notifications, review requests, and assigned issues](preview.png)
+
 ## Everything waiting for you, in one panel
 
 The dashboard is ordered by urgency so the most actionable work appears first:
