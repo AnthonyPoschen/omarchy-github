@@ -473,7 +473,10 @@ Panel {
       rowId: String(modelData.id || modelData.url || index)
       glyph: ""
       title: modelData.title
-      detail: modelData.repository + " · review requested · " + root.relativeTime(modelData.updatedAt)
+      // Drafts only appear here when the setting is on, and the reason to turn
+      // it on is knowing which requests are early feedback rather than a real
+      // review, so the row has to say which it is.
+      detail: modelData.repository + (modelData.draft ? " · draft" : "") + " · review requested · " + root.relativeTime(modelData.updatedAt)
       url: modelData.url
     }
   }

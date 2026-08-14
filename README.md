@@ -130,6 +130,7 @@ Configure the widget through Omarchy's bar widget settings:
 - Include archived repositories
 - Include forks
 - Include review requests and issues from archived repositories
+- Include review requests on drafts
 - Maximum displayed repositories
 - Actions scan mode: off, recent repositories, or all repositories
 - Number of recent repositories to scan
@@ -138,7 +139,7 @@ Configure the widget through Omarchy's bar widget settings:
 
 The defaults deliberately balance freshness and GitHub API usage. Accounts that need exhaustive workflow monitoring can select **All repositories**.
 
-Review requests and assigned issues in archived repositories are hidden by default. An archived repository is read-only, so the work cannot be done and the request cannot be withdrawn. Teams that still work in archived repositories can turn them back on.
+Review requests and assigned issues are hidden by default when they sit in an archived repository or on a draft pull request. Neither can be acted on, and neither can be withdrawn by whoever raised it. Both have their own setting, so teams that review drafts for early direction, or that still work in archived repositories, can turn them back on.
 
 ## Local development
 

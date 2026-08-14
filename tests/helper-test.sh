@@ -95,12 +95,19 @@ assert_jq '(.actions|length == 1) and (.failedActions|length == 1)' "$out" "acti
 assert_jq '.rateLimit.remaining == 4999 and (.warnings|length) == 0' "$out" "rate limit and warnings"
 grep -q -- '--paginate.*status=queued' "$GH_TEST_LOG" || fail "queued Actions request was not paginated"
 grep -q 'status=completed.*created=%3E%3D' "$GH_TEST_LOG" || fail "completed Actions request was not date bounded"
-grep -q 'review-requested%3A%40me+archived%3Afalse' "$GH_TEST_LOG" || fail "review request search was not archive filtered"
+grep -q 'review-requested%3A%40me+draft%3Afalse+archived%3Afalse' "$GH_TEST_LOG" || fail "review request search was not draft and archive filtered"
 grep -q 'assignee%3A%40me+archived%3Afalse' "$GH_TEST_LOG" || fail "assigned issue search was not archive filtered"
 : >"$GH_TEST_LOG"
 out_archived=$(PATH="$sandbox:$PATH" "$HELPER" --action-scan off --include-archived-reviews true)
 assert_jq '(.reviewRequests|length == 1) and (.assignedIssues|length == 1)' "$out_archived" "searches still return with archived included"
 if grep -q 'archived%3Afalse' "$GH_TEST_LOG"; then fail "archived filter applied despite --include-archived-reviews true"; fi
+# The draft exclusion has its own setting, so it must survive the archived one.
+grep -q 'draft%3Afalse' "$GH_TEST_LOG" || fail "draft exclusion dropped when archived repositories are included"
+: >"$GH_TEST_LOG"
+out_drafts=$(PATH="$sandbox:$PATH" "$HELPER" --action-scan off --include-draft-reviews true)
+assert_jq '.reviewRequests|length == 1' "$out_drafts" "review requests still return with drafts included"
+if grep -q 'draft%3Afalse' "$GH_TEST_LOG"; then fail "draft filter applied despite --include-draft-reviews true"; fi
+grep -q 'archived%3Afalse' "$GH_TEST_LOG" || fail "archived filter dropped when drafts are included"
 mark=$(PATH="$sandbox:$PATH" "$HELPER" --mark-notification-read 123)
 assert_jq '.state == "ready" and .notificationId == "123"' "$mark" "mark notification read"
 
