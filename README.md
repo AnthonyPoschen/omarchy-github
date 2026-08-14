@@ -139,24 +139,17 @@ The defaults deliberately balance freshness and GitHub API usage. Accounts that 
 
 ## Local development
 
-Clone and validate the plugin:
+From an existing checkout, validate and test the plugin:
 
 ```bash
-git clone https://github.com/robzolkos/omarchy-github.git
-cd omarchy-github
 omarchy plugin validate .
 tests/helper-test.sh
 ```
 
-Install the checkout for local iteration:
+Install that checkout for local iteration:
 
 ```bash
-mkdir -p ~/.config/omarchy/plugins/robzolkos.github
-cp manifest.json Panel.qml Service.qml README.md LICENSE omarchy-github-fetch \
-  ~/.config/omarchy/plugins/robzolkos.github/
-chmod +x ~/.config/omarchy/plugins/robzolkos.github/omarchy-github-fetch
-omarchy-shell shell rescanPlugins
-omarchy plugin enable robzolkos.github --section right
+omarchy plugin add "$PWD" --enable
 ```
 
 The shell watches local plugin files, making QML iteration fast.
