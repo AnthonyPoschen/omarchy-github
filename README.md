@@ -139,7 +139,7 @@ Configure the widget through Omarchy's bar widget settings:
 
 The defaults deliberately balance freshness and GitHub API usage. Accounts that need exhaustive workflow monitoring can select **All repositories**.
 
-Review requests and assigned issues are hidden by default when they sit in an archived repository or on a draft pull request. Neither can be acted on, and neither can be withdrawn by whoever raised it. Both have their own setting, so teams that review drafts for early direction, or that still work in archived repositories, can turn them back on.
+Review requests and assigned issues from archived repositories are hidden by default because archived repositories are read-only. Review requests on draft pull requests are also hidden by default, while teams that use drafts for early feedback can include them. Each behavior has its own setting.
 
 ## Local development
 
