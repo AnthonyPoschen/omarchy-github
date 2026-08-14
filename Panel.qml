@@ -522,7 +522,7 @@ Panel {
       rowId: String(modelData.id || modelData.url || index)
       // A repository with no workflows reports no rollup at all, which the
       // plain pull request glyph conveys without implying a pending run.
-      glyph: broken ? "󰅖" : (running ? "󰑮" : (checks === "SUCCESS" ? "󰄬" : ""))
+      glyph: broken ? "󰅖" : (running ? "󰑮" : (checks === "SUCCESS" ? "󰄬" : ""))
       title: modelData.title
       detail: modelData.repository + " #" + modelData.number + (modelData.draft ? " · draft" : "") + " · " + root.checkLabel(checks) + " · " + root.relativeTime(modelData.updatedAt)
       url: modelData.url
@@ -705,6 +705,7 @@ Panel {
         Text {
           Layout.fillWidth: true
           text: linkRow.title
+          textFormat: Text.PlainText
           color: root.foreground
           font.family: root.fontFamily
           font.pixelSize: Style.font.body
@@ -713,6 +714,7 @@ Panel {
         Text {
           Layout.fillWidth: true
           text: linkRow.detail
+          textFormat: Text.PlainText
           color: root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption

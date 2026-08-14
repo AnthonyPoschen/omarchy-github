@@ -149,6 +149,7 @@ From an existing checkout, validate and test the plugin:
 ```bash
 omarchy plugin validate .
 tests/helper-test.sh
+tests/panel-source-test.sh
 ```
 
 Install that checkout for local iteration:
