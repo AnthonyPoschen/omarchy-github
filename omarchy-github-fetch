@@ -54,12 +54,15 @@ emit_state() {
   jq -n --arg state "$1" --arg message "$2" '{schemaVersion:1,state:$state,message:$message,login:"",fetchedAt:(now|todateiso8601),notifications:[],reviewRequests:[],assignedIssues:[],actions:[],failedActions:[],repositories:[],warnings:[],rateLimit:null}'
 }
 
-command -v gh >/dev/null 2>&1 || { emit_state gh-not-installed "GitHub CLI is not installed or not on PATH."; exit 0; }
 command -v jq >/dev/null 2>&1 || { printf '%s\n' '{"schemaVersion":1,"state":"error","message":"jq is required.","notifications":[],"reviewRequests":[],"assignedIssues":[],"actions":[],"failedActions":[],"repositories":[],"warnings":[]}' ; exit 0; }
+if [[ -n $mark_notification && ! $mark_notification =~ ^[0-9]+$ ]]; then
+  jq -n --arg id "$mark_notification" '{state:"error",message:"Invalid notification thread id.",notificationId:$id}'
+  exit 2
+fi
+command -v gh >/dev/null 2>&1 || { emit_state gh-not-installed "GitHub CLI is not installed or not on PATH."; exit 0; }
 gh auth status -h github.com >/dev/null 2>&1 || { emit_state logged-out "Sign in with gh auth login to load GitHub data."; exit 0; }
 
 if [[ -n $mark_notification ]]; then
-  [[ $mark_notification =~ ^[0-9]+$ ]] || { jq -n --arg id "$mark_notification" '{state:"error",message:"Invalid notification thread id.",notificationId:$id}'; exit 2; }
   if error=$(mktemp); then
     if gh api --method PATCH "/notifications/threads/$mark_notification" >/dev/null 2>"$error"; then
       rm -f "$error"
