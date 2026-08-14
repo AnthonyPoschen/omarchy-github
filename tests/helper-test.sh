@@ -147,6 +147,18 @@ out_archived=$(PATH="$sandbox:$PATH" "$HELPER" --action-scan off --include-archi
 assert_jq '.myPullRequests|length == 2' "$out_archived" "authored pull requests survive the archived setting"
 grep -q 'author:@me' "$GH_TEST_LOG" || fail "authored pull request search did not run"
 if grep -q 'archived:false' "$GH_TEST_LOG"; then fail "archived filter applied despite --include-archived true"; fi
+# Each scope run truncates the log first, so the greps below read only the run
+# they belong to rather than an earlier one that used the other affiliation.
+: >"$GH_TEST_LOG"
+out_owned=$(PATH="$sandbox:$PATH" "$HELPER" --action-scan off)
+assert_jq '.repositoryScope == "owned"' "$out_owned" "default repository scope reported with the owned affiliation"
+grep -q 'ownerAffiliations:OWNER,' "$GH_TEST_LOG" || fail "default scope did not query owned repositories"
+: >"$GH_TEST_LOG"
+out_scoped=$(PATH="$sandbox:$PATH" "$HELPER" --action-scan off --repository-scope organizations)
+assert_jq '.repositoryScope == "organizations"' "$out_scoped" "organization scope reported"
+grep -q 'ownerAffiliations:\[OWNER,ORGANIZATION_MEMBER\],' "$GH_TEST_LOG" || fail "organization scope did not reach the query"
+if grep -q 'ownerAffiliations:OWNER,' "$GH_TEST_LOG"; then fail "owned affiliation used despite the organization scope"; fi
+
 : >"$GH_TEST_LOG"
 mark=$(PATH="$sandbox:$PATH" "$HELPER" --mark-notification-read 123)
 assert_jq '.state == "ready" and .notificationId == "123"' "$mark" "mark notification read"
@@ -193,18 +205,6 @@ set -e
 assert_jq '.state == "error" and .notificationId == "123"' "$mark_setup_failed" "single mark setup failure reports an error"
 assert_jq '.state == "error" and .lastReadAt == "2020-01-03T00:00:00Z"' "$bulk_setup_failed" "bulk mark setup failure reports an error"
 assert_jq '.state == "error"' "$fetch_setup_failed" "refresh setup failure reports an error"
-
-# Each scope run truncates the log first, so the greps below read only the run
-# they belong to rather than an earlier one that used the other affiliation.
-: >"$GH_TEST_LOG"
-out_owned=$(PATH="$sandbox:$PATH" "$HELPER" --action-scan off)
-assert_jq '.repositoryScope == "owned"' "$out_owned" "default repository scope reported"
-grep -q 'ownerAffiliations:OWNER,' "$GH_TEST_LOG" || fail "default scope did not query owned repositories"
-: >"$GH_TEST_LOG"
-out_scoped=$(PATH="$sandbox:$PATH" "$HELPER" --action-scan off --repository-scope organizations)
-assert_jq '.repositoryScope == "organizations"' "$out_scoped" "organization scope reported"
-grep -q 'ownerAffiliations:\[OWNER,ORGANIZATION_MEMBER\],' "$GH_TEST_LOG" || fail "organization scope did not reach the query"
-if grep -q 'ownerAffiliations:OWNER,' "$GH_TEST_LOG"; then fail "owned affiliation used despite the organization scope"; fi
 
 # The Actions scan runs in xargs subshells, which only see exported functions.
 # An unexported helper there degrades every warning to the generic fallback

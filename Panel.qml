@@ -379,10 +379,9 @@ Panel {
 
           PanelSectionHeader {
             width: parent.width
-            // The heading follows the scope actually fetched, not the setting,
-            // so it cannot claim to list organization repositories before a
-            // refresh has brought them in.
-            text: (github.repositoryScope === "owned" ? "OWNED REPOSITORIES  " : "REPOSITORIES  ") + root.displayedRepositories.length + "/" + github.repositories.length
+            // Driven by the fetched scope, not the setting, so it cannot claim
+            // to list organization repositories before a refresh brings them in.
+            text: (github.fetchedRepositoryScope === "owned" ? "OWNED REPOSITORIES  " : "REPOSITORIES  ") + root.displayedRepositories.length + "/" + github.repositories.length
             foreground: root.foreground
             fontFamily: root.fontFamily
           }
@@ -453,7 +452,7 @@ Panel {
           Text {
             visible: root.displayedRepositories.length === 0
             width: parent.width
-            text: github.repositories.length === 0 ? "No owned repositories loaded." : "No repositories match these filters."
+            text: github.repositories.length === 0 ? "No repositories loaded." : "No repositories match these filters."
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.body

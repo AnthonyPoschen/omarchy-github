@@ -5,7 +5,7 @@
   "version": "0.2.2",
   "author": "Rob Zolkos",
   "license": "MIT",
-  "description": "A keyboard-friendly GitHub inbox for notifications, reviews, your own pull requests, assigned issues, Actions, and owned repositories.",
+  "description": "A keyboard-friendly GitHub inbox for notifications, reviews, your own pull requests, assigned issues, Actions, and repositories.",
   "kinds": ["bar-widget"],
   "activation": "on-demand",
   "entryPoints": {
@@ -40,7 +40,7 @@
       { "key": "includeArchivedReviewRequests", "type": "boolean", "label": "Include review requests and issues from archived repositories", "defaultValue": false, "description": "An archived repository is read-only, so the request cannot be withdrawn and the work cannot be done." },
       { "key": "includeDraftReviewRequests", "type": "boolean", "label": "Include review requests on drafts", "defaultValue": false, "description": "Draft pull requests are not ready for review, but some teams do ask for early feedback on them." },
       { "key": "maxDisplayedRepos", "type": "integer", "label": "Maximum displayed repositories", "min": 10, "max": 500, "step": 5, "defaultValue": 25, "description": "Caps rendered repository rows while search and filtering continue to use the complete fetched list." },
-      { "key": "actionScanBehavior", "type": "enum", "label": "Actions scan", "options": ["Off", "Recent repositories", "All repositories"], "defaultValue": "Recent repositories", "description": "Scan no repositories, the most recently updated repositories, or every owned repository for active and recent failed workflow runs." },
+      { "key": "actionScanBehavior", "type": "enum", "label": "Actions scan", "options": ["Off", "Recent repositories", "All repositories"], "defaultValue": "Recent repositories", "description": "Scan no repositories, the most recently updated repositories, or every repository in the configured scope for active and recent failed workflow runs." },
       { "key": "actionScanRepoLimit", "type": "integer", "label": "Recent repository scan limit", "min": 5, "max": 200, "step": 5, "defaultValue": 15 },
       { "key": "actionScanConcurrency", "type": "integer", "label": "Actions scan concurrency", "min": 1, "max": 12, "step": 1, "defaultValue": 6 },
       { "key": "failedActionDays", "type": "integer", "label": "Failed Actions window (days)", "min": 1, "max": 30, "step": 1, "defaultValue": 7 },

@@ -118,7 +118,7 @@ The notifications footer also carries **Mark all read**. The first click capture
 
 ## Repository dashboard
 
-Every owned repository includes:
+Every listed repository includes:
 
 - Open issue count
 - Open pull request count

@@ -31,3 +31,7 @@ assert_contains $'PanelActionButton {\n        visible: linkRow.showReadAction\n
   "notification row marking is enabled during refresh"
 
 echo "panel source tests passed"
+assert_contains 'github.fetchedRepositoryScope === "owned" ? "OWNED REPOSITORIES  " : "REPOSITORIES  "' \
+  "the repository heading does not follow the fetched scope"
+assert_contains '"No repositories loaded."' \
+  "the repository empty state still claims a scope"
