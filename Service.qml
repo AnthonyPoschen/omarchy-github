@@ -17,6 +17,7 @@ Item {
     property var notifications: []
     property var reviewRequests: []
     property var assignedIssues: []
+    property var myPullRequests: []
     property var actions: []
     property var failedActions: []
     property var repositories: []
@@ -32,7 +33,13 @@ Item {
     readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 900, 60, 3600)
     readonly property int unreadCount: notifications.length
     readonly property int actionCount: actions.length
-    readonly property bool alarming: unreadCount > 0 || actionCount > 0 || reviewRequests.length > 0
+    // A broken check on your own pull request is the kind of thing the bar icon
+    // exists to surface, so it counts toward the alarming state.
+    readonly property int failingPullRequestCount: myPullRequests.filter(function(item) {
+        var checks = String(item.checks || "");
+        return checks === "FAILURE" || checks === "ERROR";
+    }).length
+    readonly property bool alarming: unreadCount > 0 || actionCount > 0 || reviewRequests.length > 0 || failingPullRequestCount > 0
 
     function setting(name, fallback) {
         var value = settings ? settings[name] : undefined;
@@ -97,6 +104,7 @@ Item {
             notifications = Array.isArray(data.notifications) ? data.notifications : [];
             reviewRequests = Array.isArray(data.reviewRequests) ? data.reviewRequests : [];
             assignedIssues = Array.isArray(data.assignedIssues) ? data.assignedIssues : [];
+            myPullRequests = Array.isArray(data.myPullRequests) ? data.myPullRequests : [];
             actions = Array.isArray(data.actions) ? data.actions : [];
             failedActions = Array.isArray(data.failedActions) ? data.failedActions : [];
             repositories = Array.isArray(data.repositories) ? data.repositories : [];

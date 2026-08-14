@@ -23,6 +23,7 @@ Panel {
   property int cursorIndex: 0
   property bool notificationsExpanded: false
   property bool reviewsExpanded: false
+  property bool myPullsExpanded: false
   property bool issuesExpanded: false
   property bool actionsExpanded: false
   property bool failuresExpanded: false
@@ -53,6 +54,7 @@ Panel {
     }
     add("notification", sectionRows(github.notifications, notificationsExpanded))
     add("review", sectionRows(github.reviewRequests, reviewsExpanded))
+    add("mypull", sectionRows(github.myPullRequests, myPullsExpanded))
     add("issue", sectionRows(github.assignedIssues, issuesExpanded))
     add("action", sectionRows(github.actions, actionsExpanded))
     add("failure", sectionRows(github.failedActions, failuresExpanded))
@@ -97,6 +99,14 @@ Panel {
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
     return value === undefined || value === null ? fallback : value
+  }
+
+  function checkLabel(checks) {
+    if (checks === "SUCCESS") return "checks passing"
+    if (checks === "FAILURE") return "checks failing"
+    if (checks === "ERROR") return "checks errored"
+    if (checks === "PENDING" || checks === "EXPECTED") return "checks running"
+    return "no checks"
   }
 
   function openUrl(url) {
@@ -303,6 +313,17 @@ Panel {
 
           DashboardSection {
             visible: count > 0
+            title: "MY PULL REQUESTS"
+            count: github.myPullRequests.length
+            model: root.sectionRows(github.myPullRequests, root.myPullsExpanded)
+            expanded: root.myPullsExpanded
+            openUrl: "https://github.com/pulls"
+            onToggleExpanded: root.myPullsExpanded = !root.myPullsExpanded
+            delegateComponent: myPullRequestDelegate
+          }
+
+          DashboardSection {
+            visible: count > 0
             title: "ASSIGNED ISSUES"
             count: github.assignedIssues.length
             model: root.sectionRows(github.assignedIssues, root.issuesExpanded)
@@ -478,6 +499,29 @@ Panel {
       // review, so the row has to say which it is.
       detail: modelData.repository + (modelData.draft ? " · draft" : "") + " · review requested · " + root.relativeTime(modelData.updatedAt)
       url: modelData.url
+    }
+  }
+
+  Component {
+    id: myPullRequestDelegate
+    LinkRow {
+      required property var modelData
+      required property int index
+      readonly property string checks: String(modelData.checks || "NONE")
+      readonly property bool broken: checks === "FAILURE" || checks === "ERROR"
+      readonly property bool running: checks === "PENDING" || checks === "EXPECTED"
+      width: parent ? parent.width : 0
+      rowKind: "mypull"
+      rowIndex: index
+      rowId: String(modelData.id || modelData.url || index)
+      // A repository with no workflows reports no rollup at all, which the
+      // plain pull request glyph conveys without implying a pending run.
+      glyph: broken ? "󰅖" : (running ? "󰑮" : (checks === "SUCCESS" ? "󰄬" : ""))
+      title: modelData.title
+      detail: modelData.repository + " #" + modelData.number + (modelData.draft ? " · draft" : "") + " · " + root.checkLabel(checks) + " · " + root.relativeTime(modelData.updatedAt)
+      url: modelData.url
+      danger: broken
+      pulse: running
     }
   }
 
