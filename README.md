@@ -130,21 +130,40 @@ Use the filter chips to show all repositories or only repositories with a non-ze
 
 ## Settings
 
-Configure the widget through Omarchy's bar widget settings:
+Configure the widget through Omarchy's bar widget settings. Existing installations retain the narrower repository scope and bounded Actions scan:
 
-- Refresh interval
-- Include archived repositories
-- Include forks
-- Repository scope: owned repositories, or owned and organization repositories
-- Include review requests and issues from archived repositories
-- Include review requests on drafts
-- Maximum displayed repositories
-- Actions scan mode: off, recent repositories, or all repositories
-- Number of recent repositories to scan
-- Actions request concurrency
-- Failed Actions time window and maximum result count
+| Setting | Default |
+| --- | --- |
+| Refresh interval | 900 seconds (15 minutes) |
+| Include archived repositories | Off |
+| Include forks | Off |
+| Repository scope | **Owned** |
+| Include review requests and issues from archived repositories | Off |
+| Include review requests on drafts | Off |
+| Maximum displayed repositories | 25 |
+| Actions scan | **Recent repositories** |
+| Recent repository scan limit | 15 |
+| Actions request concurrency | 6 |
+| Failed Actions window | 7 days |
+| Maximum failed Actions | 20 |
 
-The defaults deliberately balance freshness and GitHub API usage. Accounts that need exhaustive workflow monitoring can select **All repositories**.
+**Repository scope** controls both the repository dashboard and the candidate repositories for Actions scanning. **Owned and organizations** is opt-in. With the default **Recent repositories** scan, Actions requests remain capped to the 15 most recently updated repositories in that wider scope.
+
+**All repositories** is also opt-in and starts six paginated Actions request streams per repository on every refresh. Combining it with **Owned and organizations** can consume substantial GitHub API capacity in large organizations. Use **Recent repositories** or **Off** for a bounded scan, and increase the refresh interval when broader monitoring is required.
+
+Set these options from the command line after installing the plugin:
+
+```bash
+omarchy bar set robzolkos.github repositoryScope "Owned and organizations"
+omarchy bar set robzolkos.github actionScanBehavior "Recent repositories"
+```
+
+Restore the narrowest behavior with:
+
+```bash
+omarchy bar set robzolkos.github repositoryScope "Owned"
+omarchy bar set robzolkos.github actionScanBehavior "Off"
+```
 
 Review requests and assigned issues from archived repositories are hidden by default because archived repositories are read-only. Review requests on draft pull requests are also hidden by default, while teams that use drafts for early feedback can include them. Each behavior has its own setting.
 

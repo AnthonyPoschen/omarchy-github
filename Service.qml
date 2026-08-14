@@ -96,7 +96,7 @@ Item {
         if (value === "off")
             return "off";
 
-        if (value.indexOf("all") === 0)
+        if (value === "all repositories")
             return "all";
 
         return "recent";
