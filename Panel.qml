@@ -81,6 +81,7 @@ Panel {
     openUrl(selectedTarget.row.url)
   }
   function markSelectedRead() {
+    if (github.marking) return
     if (selectedTarget && selectedTarget.kind === "notification") github.markNotificationRead(String(selectedTarget.row.id || ""))
   }
   function scrollItemIntoView(item) {
@@ -310,7 +311,7 @@ Panel {
             actionText: "Mark all read"
             actionBusyText: "Marking…"
             actionEnabled: github.state === "ready"
-            actionBusy: github.markingAllNotifications
+            actionBusy: github.marking
             onActionTriggered: github.markAllNotificationsRead()
           }
 
@@ -614,6 +615,11 @@ Panel {
 
     function disarmAction() { section.actionArmed = false; actionArmTimer.stop() }
 
+    // An armed confirmation must not outlive the button being clickable, or it
+    // would fire on the first click once the button comes back.
+    onActionBusyChanged: if (section.actionBusy) section.disarmAction()
+    onActionEnabledChanged: if (!section.actionEnabled) section.disarmAction()
+
     width: parent ? parent.width : 0
     spacing: Style.space(8)
 
@@ -665,6 +671,13 @@ Panel {
         onClicked: section.toggleExpanded()
       }
       Button {
+        id: actionButton
+        // The confirm and busy labels are shorter than the idle one. Letting the
+        // button shrink would slide its neighbours under a pointer that is about
+        // to click again, so the widest label seen so far sets the width.
+        property real reservedWidth: 0
+        onImplicitWidthChanged: reservedWidth = Math.max(reservedWidth, implicitWidth)
+        width: Math.max(reservedWidth, implicitWidth)
         visible: sectionFooter.showAction
         enabled: !section.actionBusy
         text: section.actionBusy ? section.actionBusyText : (section.actionArmed ? section.actionConfirmText : section.actionText)
@@ -764,7 +777,7 @@ Panel {
       }
       PanelActionButton {
         visible: linkRow.showReadAction
-        enabled: github.markingNotificationId === ""
+        enabled: !github.marking
         iconText: github.markingNotificationId === linkRow.notificationId ? "󰑐" : "󰄬"
         tooltipText: "Mark this notification read (M)"
         foreground: root.foreground

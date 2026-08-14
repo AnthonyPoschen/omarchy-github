@@ -144,4 +144,27 @@ assert_jq '.state == "ready" and .lastReadAt == "2026-01-03T00:00:00Z"' "$mark_a
 mark_all_failed=$(PATH="$sandbox:$PATH" "$HELPER" --mark-all-read-before 2020-01-01T00:00:00Z) || true
 assert_jq '.state == "error" and .lastReadAt == "2020-01-01T00:00:00Z"' "$mark_all_failed" "failed mark all reports an error"
 
+# The Actions scan runs in xargs subshells, which only see exported functions.
+# An unexported helper there degrades every warning to the generic fallback
+# instead of the API's own explanation.
+cat >"$sandbox/gh" <<'GH'
+#!/usr/bin/env bash
+if [[ $1 == auth ]]; then exit 0; fi
+if [[ $1 == api && $2 == graphql ]]; then
+  cat <<'JSON'
+{"data":{"viewer":{"login":"octocat","repositories":{"nodes":[{"name":"hello","nameWithOwner":"octocat/hello","url":"https://github.com/octocat/hello","isArchived":false,"isFork":false,"stargazerCount":1,"updatedAt":"2026-01-01T00:00:00Z","issues":{"totalCount":0},"pullRequests":{"totalCount":0}}],"pageInfo":{"hasNextPage":false,"endCursor":null}}},"rateLimit":{"remaining":10,"resetAt":"2026-01-01T01:00:00Z","cost":1}}}
+JSON
+  exit 0
+fi
+endpoint=${*: -1}
+if [[ $endpoint == /repos/octocat/hello/actions/runs* ]]; then
+  echo "HTTP 403: Resource not accessible by integration" >&2
+  exit 1
+fi
+printf '%s\n' '[]'
+GH
+chmod +x "$sandbox/gh"
+scoped=$(PATH="$sandbox:$PATH" "$HELPER" --action-scan all)
+assert_jq '(.warnings|length) > 0 and (.warnings[0]|test("403"))' "$scoped" "Actions warnings keep the API error text"
+
 echo "helper tests passed"

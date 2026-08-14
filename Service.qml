@@ -33,6 +33,10 @@ Item {
     property string _markStdout: ""
     property string _markStderr: ""
     property string _markBoundary: ""
+    // Single-thread and bulk marking share one process, so the panel gates every
+    // entry point on this rather than on whichever flag a given call happens to
+    // set. A caller added later inherits the guard instead of having to know.
+    readonly property bool marking: markProcess.running
     readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 900, 60, 3600)
     readonly property int unreadCount: notifications.length
     readonly property int actionCount: actions.length
@@ -147,13 +151,21 @@ Item {
         markProcess.running = true;
     }
 
-    // Bounded by the timestamp of the data on screen so threads that arrived
-    // since the last refresh are never cleared unseen.
+    // Bounded by the newest thread on screen so anything that arrived since the
+    // last refresh stays unread. The boundary is GitHub's own updated_at rather
+    // than fetchedAt, which comes from the local clock: a machine running fast
+    // would push the boundary into the future and clear threads never displayed.
     function markAllNotificationsRead() {
         if (notifications.length === 0 || markProcess.running)
             return ;
 
-        var boundary = String(fetchedAt || "");
+        var boundary = "";
+        for (var i = 0; i < notifications.length; i++) {
+            var updated = String(notifications[i].updatedAt || "");
+            if (updated > boundary)
+                boundary = updated;
+
+        }
         if (boundary === "") {
             notificationActionStatus = "Refresh before marking everything read.";
             actionStatusTimer.restart();

@@ -228,7 +228,7 @@ if [[ $action_scan != off && $(jq 'length' "$tmp/repos.json") -gt 0 ]]; then
     jq -s --arg repo "$repo" '[.[]|.workflow_runs[]?|select(.status=="completed")|{id,repository:$repo,name:(.name // .display_title // "Workflow"),title:(.display_title // ""),status:(.status // ""),conclusion:(.conclusion // ""),event:(.event // ""),branch:(.head_branch // ""),url:(.html_url // ""),createdAt:(.created_at // ""),updatedAt:(.updated_at // "")}]|unique_by(.id)' "$prefix.completed.pages" >"$prefix.completed.json" 2>/dev/null || printf '[]\n' >"$prefix.completed.json"
     if [[ $failed == true ]]; then api_error "actions $repo" "$prefix.err"; fi
   }
-  export tmp warnings cutoff_date; export -f scan_one api_error
+  export tmp warnings cutoff_date; export -f scan_one api_error error_detail
   xargs -r -P "$concurrency" -I{} bash -c 'scan_one "$1"' _ {} <"$tmp/scan-repos"
   jq -s 'add // []|unique_by(.id)|sort_by(.createdAt)|reverse' "$tmp"/action-*.active.json >"$tmp/actions.json" 2>/dev/null || printf '[]\n' >"$tmp/actions.json"
   jq -s --argjson cutoff "$cutoff_epoch" --argjson limit "$failed_limit" 'add // []|[.[]|select((.conclusion=="failure" or .conclusion=="timed_out" or .conclusion=="action_required" or .conclusion=="startup_failure") and ((.createdAt|fromdateiso8601) >= $cutoff))]|unique_by(.id)|sort_by(.updatedAt)|reverse|.[:$limit]' "$tmp"/action-*.completed.json >"$tmp/failed.json" 2>/dev/null || printf '[]\n' >"$tmp/failed.json"

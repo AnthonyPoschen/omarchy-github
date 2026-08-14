@@ -10,7 +10,7 @@ Your GitHub work, directly in the Omarchy bar.
 
 The dashboard is ordered by urgency so the most actionable work appears first:
 
-- **Unread notifications** — open the related thread or mark it read in place
+- **Unread notifications** — open the related thread, mark it read in place, or clear the whole list
 - **Review requests** — see pull requests waiting on your review
 - **My pull requests** — track the pull requests you opened and the state of their checks
 - **Assigned issues** — keep track of open issues assigned to you
@@ -26,6 +26,7 @@ Repository search, metric filters, and sorting make even large GitHub accounts m
 - Compact previews that keep busy accounts readable
 - Direct links to notifications, pull requests, issues, workflow runs, and repositories
 - One-click notification mark-as-read, confirmed by GitHub before removal
+- Bulk mark-as-read behind a confirmation step, bounded to the threads on screen
 - Complete paginated repository and notification fetching
 - Configurable Actions scanning with bounded concurrency
 - Graceful partial results when an endpoint or repository is unavailable
@@ -101,6 +102,8 @@ omarchy plugin remove robzolkos.github
 | Right or middle click Octocat | Refresh |
 | Click a row | Open it on GitHub |
 | Check button on a notification | Mark the thread read after GitHub confirms it |
+| **Mark all read** in the notifications footer | Arm the bulk mark-as-read |
+| **Confirm?** on the armed button | Mark every notification on screen read |
 | `j` / `k` or arrow keys | Move through visible rows |
 | `Enter` / `Space` | Open the highlighted row |
 | `m` | Mark the highlighted notification read |
@@ -110,6 +113,8 @@ omarchy plugin remove robzolkos.github
 | `Escape` elsewhere | Close the panel |
 
 Activity sections show five items initially and expand to a bounded list of 25. **Open in GitHub** takes you to the corresponding complete GitHub view where one is available.
+
+The notifications footer also carries **Mark all read**. The first click arms it and the label becomes **Confirm?**; only the second click sends the request. The confirmation lapses after a few seconds, when the panel closes, and whenever another mark is already running. The request is bounded by the newest thread on screen, so anything GitHub received after the last refresh stays unread. Large inboxes are processed asynchronously by GitHub, so an immediate refresh can briefly show threads that are already on their way out.
 
 ## Repository dashboard
 
