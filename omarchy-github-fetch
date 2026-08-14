@@ -13,6 +13,8 @@ concurrency=6
 failed_days=7
 failed_limit=20
 mark_notification=""
+mark_all_before=""
+mark_boundary_notifications=()
 
 usage() {
   cat <<'EOF'
@@ -30,6 +32,10 @@ Usage: omarchy-github-fetch [options]
   --failed-days N               Show failed runs from the last N days, 1-30 (default: 7)
   --failed-limit N              Maximum recent failed runs, 1-100 (default: 20)
   --mark-notification-read ID   Mark one notification thread read and exit
+  --mark-all-read-before TIME   Mark fetched notifications through TIME read
+  --mark-boundary-notification ID
+                                Preserve same-second arrivals by marking only
+                                the fetched boundary thread ID (repeatable)
 EOF
 }
 
@@ -48,6 +54,8 @@ while (($#)); do
     --failed-days) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; failed_days=$2; shift 2 ;;
     --failed-limit) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; failed_limit=$2; shift 2 ;;
     --mark-notification-read) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; mark_notification=$2; shift 2 ;;
+    --mark-all-read-before) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; mark_all_before=$2; shift 2 ;;
+    --mark-boundary-notification) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; mark_boundary_notifications+=("$2"); shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -68,30 +76,88 @@ if [[ -n $mark_notification && ! $mark_notification =~ ^[0-9]+$ ]]; then
   jq -n --arg id "$mark_notification" '{state:"error",message:"Invalid notification thread id.",notificationId:$id}'
   exit 2
 fi
+mark_bulk_before=""
+if [[ -n $mark_all_before ]]; then
+  if [[ ! $mark_all_before =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] ||
+     ! jq -en --arg at "$mark_all_before" '($at | fromdateiso8601) as $time | (($time | todateiso8601) == $at and $time <= now)' >/dev/null 2>&1; then
+    jq -n --arg at "$mark_all_before" '{state:"error",message:"Invalid or future last-read timestamp.",lastReadAt:$at}'
+    exit 2
+  fi
+  ((${#mark_boundary_notifications[@]} > 0)) || { jq -n --arg at "$mark_all_before" '{state:"error",message:"At least one boundary notification is required.",lastReadAt:$at}'; exit 2; }
+  for id in "${mark_boundary_notifications[@]}"; do
+    [[ $id =~ ^[0-9]+$ ]] || { jq -n --arg id "$id" '{state:"error",message:"Invalid boundary notification thread id.",notificationId:$id}'; exit 2; }
+  done
+  mark_bulk_before=$(jq -nr --arg at "$mark_all_before" '($at | fromdateiso8601) - 1 | todateiso8601')
+elif ((${#mark_boundary_notifications[@]} > 0)); then
+  jq -n '{state:"error",message:"Boundary notifications require --mark-all-read-before."}'
+  exit 2
+fi
+if [[ -n $mark_notification && -n $mark_all_before ]]; then
+  jq -n '{state:"error",message:"Choose one notification marking operation."}'
+  exit 2
+fi
 command -v gh >/dev/null 2>&1 || { emit_state gh-not-installed "GitHub CLI is not installed or not on PATH."; exit 0; }
 gh auth status -h github.com >/dev/null 2>&1 || { emit_state logged-out "Sign in with gh auth login to load GitHub data."; exit 0; }
 
+error_detail() {
+  tr '\n' ' ' <"$1" |
+    sed -E 's/(gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})/[REDACTED]/g; s/(Authorization: *(token|Bearer) +)[^ ]+/\1[REDACTED]/Ig; s/[[:space:]]+/ /g; s/^ //; s/ $//' |
+    cut -c1-240
+}
+
 if [[ -n $mark_notification ]]; then
-  if error=$(mktemp); then
-    if gh api --method PATCH "/notifications/threads/$mark_notification" >/dev/null 2>"$error"; then
-      rm -f "$error"
-      jq -n --arg id "$mark_notification" '{state:"ready",message:"Notification marked read.",notificationId:$id}'
-      exit 0
-    fi
-    detail=$(tr '\n' ' ' <"$error" | sed 's/[[:space:]]\+/ /g;s/^ //;s/ $//' | cut -c1-240)
-    rm -f "$error"
-    jq -n --arg id "$mark_notification" --arg message "${detail:-Could not mark notification read.}" '{state:"error",message:$message,notificationId:$id}'
+  if ! error=$(mktemp); then
+    jq -n --arg id "$mark_notification" '{state:"error",message:"Could not prepare the notification request.",notificationId:$id}'
     exit 1
   fi
+  if gh api --method PATCH "/notifications/threads/$mark_notification" >/dev/null 2>"$error"; then
+    rm -f "$error"
+    jq -n --arg id "$mark_notification" '{state:"ready",message:"Notification marked read.",notificationId:$id}'
+    exit 0
+  fi
+  detail=$(error_detail "$error")
+  rm -f "$error"
+  jq -n --arg id "$mark_notification" --arg message "${detail:-Could not mark notification read.}" '{state:"error",message:$message,notificationId:$id}'
+  exit 1
 fi
 
-tmp=$(mktemp -d)
+# Mark everything before the boundary second in bulk, then mark only the
+# fetched threads from the boundary second. A new thread arriving in that same
+# second remains unread because its ID is not in the confirmed snapshot.
+if [[ -n $mark_all_before ]]; then
+  if ! error=$(mktemp); then
+    jq -n --arg at "$mark_all_before" '{state:"error",message:"Could not prepare the bulk notification request.",lastReadAt:$at}'
+    exit 1
+  fi
+  if ! gh api --method PUT /notifications -f last_read_at="$mark_bulk_before" >/dev/null 2>"$error"; then
+    detail=$(error_detail "$error")
+    rm -f "$error"
+    jq -n --arg at "$mark_all_before" --arg message "${detail:-Could not mark all notifications read.}" '{state:"error",message:$message,lastReadAt:$at}'
+    exit 1
+  fi
+  for id in "${mark_boundary_notifications[@]}"; do
+    if ! gh api --method PATCH "/notifications/threads/$id" >/dev/null 2>"$error"; then
+      detail=$(error_detail "$error")
+      rm -f "$error"
+      jq -n --arg at "$mark_all_before" --arg id "$id" --arg message "${detail:-Could not mark a boundary notification read.}" '{state:"error",message:$message,lastReadAt:$at,notificationId:$id}'
+      exit 1
+    fi
+  done
+  rm -f "$error"
+  jq -n --arg at "$mark_all_before" '{state:"ready",message:"All displayed notifications marked read.",lastReadAt:$at}'
+  exit 0
+fi
+
+if ! tmp=$(mktemp -d); then
+  emit_state error "Could not prepare temporary storage for the GitHub refresh."
+  exit 1
+fi
 trap 'rm -rf "$tmp"' EXIT
 warnings="$tmp/warnings"
 : >"$warnings"
 api_error() {
   local label=$1 err=$2 detail
-  detail=$(tr '\n' ' ' <"$err" | sed 's/[[:space:]]\+/ /g;s/^ //;s/ $//' | cut -c1-240)
+  detail=$(error_detail "$err")
   [[ -n $detail ]] || detail="request failed"
   printf '%s: %s\n' "$label" "$detail" >>"$warnings"
 }
@@ -202,7 +268,7 @@ if [[ $action_scan != off && $(jq 'length' "$tmp/repos.json") -gt 0 ]]; then
     jq -s --arg repo "$repo" '[.[]|.workflow_runs[]?|select(.status=="completed")|{id,repository:$repo,name:(.name // .display_title // "Workflow"),title:(.display_title // ""),status:(.status // ""),conclusion:(.conclusion // ""),event:(.event // ""),branch:(.head_branch // ""),url:(.html_url // ""),createdAt:(.created_at // ""),updatedAt:(.updated_at // "")}]|unique_by(.id)' "$prefix.completed.pages" >"$prefix.completed.json" 2>/dev/null || printf '[]\n' >"$prefix.completed.json"
     if [[ $failed == true ]]; then api_error "actions $repo" "$prefix.err"; fi
   }
-  export tmp warnings cutoff_date; export -f scan_one api_error
+  export tmp warnings cutoff_date; export -f scan_one api_error error_detail
   xargs -r -P "$concurrency" -I{} bash -c 'scan_one "$1"' _ {} <"$tmp/scan-repos"
   jq -s 'add // []|unique_by(.id)|sort_by(.createdAt)|reverse' "$tmp"/action-*.active.json >"$tmp/actions.json" 2>/dev/null || printf '[]\n' >"$tmp/actions.json"
   jq -s --argjson cutoff "$cutoff_epoch" --argjson limit "$failed_limit" 'add // []|[.[]|select((.conclusion=="failure" or .conclusion=="timed_out" or .conclusion=="action_required" or .conclusion=="startup_failure") and ((.createdAt|fromdateiso8601) >= $cutoff))]|unique_by(.id)|sort_by(.updatedAt)|reverse|.[:$limit]' "$tmp"/action-*.completed.json >"$tmp/failed.json" 2>/dev/null || printf '[]\n' >"$tmp/failed.json"

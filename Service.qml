@@ -15,6 +15,7 @@ Item {
     property string login: ""
     property string fetchedAt: ""
     property var notifications: []
+    property int notificationsRevision: 0
     property var reviewRequests: []
     property var assignedIssues: []
     property var myPullRequests: []
@@ -28,9 +29,14 @@ Item {
     property string _stderr: ""
     property bool refreshQueued: false
     property string markingNotificationId: ""
+    property bool markingAllNotifications: false
     property string notificationActionStatus: ""
     property string _markStdout: ""
     property string _markStderr: ""
+    // Single-thread and bulk marking share one process, so the panel gates every
+    // entry point on this rather than on whichever flag a given call happens to
+    // set. A caller added later inherits the guard instead of having to know.
+    readonly property bool marking: markProcess.running
     readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 900, 60, 3600)
     readonly property int unreadCount: notifications.length
     readonly property int actionCount: actions.length
@@ -97,10 +103,11 @@ Item {
     }
 
     function refresh() {
-        if (fetchProcess.running) {
+        if (fetchProcess.running || markProcess.running) {
             refreshQueued = true;
             return ;
         }
+        refreshQueued = false;
         loading = true;
         _stdout = "";
         _stderr = "";
@@ -116,6 +123,7 @@ Item {
             login = String(data.login || "");
             fetchedAt = String(data.fetchedAt || "");
             notifications = Array.isArray(data.notifications) ? data.notifications : [];
+            notificationsRevision++;
             reviewRequests = Array.isArray(data.reviewRequests) ? data.reviewRequests : [];
             assignedIssues = Array.isArray(data.assignedIssues) ? data.assignedIssues : [];
             myPullRequests = Array.isArray(data.myPullRequests) ? data.myPullRequests : [];
@@ -134,14 +142,95 @@ Item {
 
     function markNotificationRead(id) {
         var value = String(id || "");
-        if (value === "" || markProcess.running)
+        if (value === "" || loading || fetchProcess.running || markProcess.running)
             return ;
 
+        actionStatusTimer.stop();
         markingNotificationId = value;
         notificationActionStatus = "Marking notification read…";
         _markStdout = "";
         _markStderr = "";
         markProcess.command = [helperPath(), "--mark-notification-read", value];
+        markProcess.running = true;
+    }
+
+    function canonicalNotificationTimestamp(value) {
+        var text = String(value || "");
+        if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(text))
+            return "";
+
+        var milliseconds = Date.parse(text);
+        if (!isFinite(milliseconds) || new Date(milliseconds).toISOString().replace(".000Z", "Z") !== text)
+            return "";
+
+        return milliseconds <= Date.now() ? text : "";
+    }
+
+    // Capture the exact displayed boundary on the first click. The panel binds
+    // confirmation to notificationsRevision, so any refresh invalidates this
+    // prepared value before the destructive second click can run.
+    function prepareMarkAllNotificationsRead() {
+        if (notifications.length === 0 || loading || fetchProcess.running || markProcess.running)
+            return "";
+
+        var boundary = "";
+        for (var i = 0; i < notifications.length; i++) {
+            var updated = canonicalNotificationTimestamp(notifications[i].updatedAt);
+            if (updated === "") {
+                notificationActionStatus = "Refresh before marking everything read.";
+                actionStatusTimer.restart();
+                return "";
+            }
+            if (updated > boundary)
+                boundary = updated;
+        }
+
+        var boundaryIds = [];
+        for (var j = 0; j < notifications.length; j++) {
+            if (String(notifications[j].updatedAt || "") !== boundary)
+                continue;
+            var id = String(notifications[j].id || "");
+            if (!/^\d+$/.test(id)) {
+                notificationActionStatus = "Refresh before marking everything read.";
+                actionStatusTimer.restart();
+                return "";
+            }
+            boundaryIds.push(id);
+        }
+        return JSON.stringify({boundary: boundary, boundaryIds: boundaryIds, revision: notificationsRevision});
+    }
+
+    function markAllNotificationsRead(prepared) {
+        var confirmed = String(prepared || "");
+        if (confirmed === "" || loading || fetchProcess.running || markProcess.running)
+            return ;
+
+        // Recompute immediately before starting. This protects non-panel callers
+        // as well as the panel's revision-bound confirmation.
+        if (confirmed !== prepareMarkAllNotificationsRead()) {
+            notificationActionStatus = "Notifications changed. Confirm again.";
+            actionStatusTimer.restart();
+            return ;
+        }
+
+        var snapshot;
+        try {
+            snapshot = JSON.parse(confirmed);
+        } catch (error) {
+            notificationActionStatus = "Refresh before marking everything read.";
+            actionStatusTimer.restart();
+            return ;
+        }
+
+        actionStatusTimer.stop();
+        markingAllNotifications = true;
+        notificationActionStatus = "Marking all notifications read…";
+        _markStdout = "";
+        _markStderr = "";
+        var commandLine = [helperPath(), "--mark-all-read-before", String(snapshot.boundary || "")];
+        for (var i = 0; i < snapshot.boundaryIds.length; i++)
+            commandLine.push("--mark-boundary-notification", String(snapshot.boundaryIds[i]));
+        markProcess.command = commandLine;
         markProcess.running = true;
     }
 
@@ -211,17 +300,20 @@ Item {
                 response = JSON.parse(String(markOutput.text || root._markStdout || ""));
             } catch (error) {
             }
+            var all = root.markingAllNotifications;
             if (exitCode === 0 && response && response.state === "ready") {
-                var markedId = root.markingNotificationId;
-                root.notifications = root.notifications.filter(function(item) {
-                    return String(item.id || "") !== markedId;
-                });
-                root.notificationActionStatus = "Notification marked read.";
+                root.notificationActionStatus = all ? "Notifications marked read. Refreshing…" : "Notification marked read. Refreshing…";
             } else {
-                root.notificationActionStatus = response && response.message ? String(response.message) : String(markErrors.text || root._markStderr || "Could not mark notification read.").trim();
+                var fallback = all ? "Could not mark all notifications read." : "Could not mark notification read.";
+                root.notificationActionStatus = response && response.message ? String(response.message) : String(markErrors.text || root._markStderr || fallback).trim();
             }
             root.markingNotificationId = "";
+            root.markingAllNotifications = false;
             actionStatusTimer.restart();
+            // GitHub is authoritative after every attempt. This reconciles
+            // successful, failed, and partially completed bulk operations.
+            root.refreshQueued = false;
+            Qt.callLater(root.refresh);
         }
 
         stdout: StdioCollector {

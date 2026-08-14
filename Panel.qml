@@ -81,6 +81,7 @@ Panel {
     openUrl(selectedTarget.row.url)
   }
   function markSelectedRead() {
+    if (github.loading || github.marking) return
     if (selectedTarget && selectedTarget.kind === "notification") github.markNotificationRead(String(selectedTarget.row.id || ""))
   }
   function scrollItemIntoView(item) {
@@ -153,12 +154,17 @@ Panel {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
-  onOpenedChanged: if (opened) {
-    cursorActive = false
-    cursorIndex = 0
-    if (panelFlick) panelFlick.contentY = 0
-    github.refresh()
-    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+  onOpenedChanged: {
+    // A pending confirmation must never survive the panel closing, or the next
+    // open would run a destructive action on a single click.
+    if (notificationsSection) notificationsSection.disarmAction()
+    if (opened) {
+      cursorActive = false
+      cursorIndex = 0
+      if (panelFlick) panelFlick.contentY = 0
+      github.refresh()
+      Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+    }
   }
   onCursorTargetsChanged: ensureCursor()
 
@@ -258,6 +264,7 @@ Panel {
             visible: github.notificationActionStatus !== ""
             width: parent.width
             text: github.notificationActionStatus
+            textFormat: Text.PlainText
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
@@ -285,6 +292,7 @@ Panel {
                 if (github.warnings.length > 1) summary += " · " + (github.warnings.length - 1) + " more"
                 return summary
               }
+              textFormat: Text.PlainText
               color: github.state === "ready" ? root.dim : root.urgent
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
@@ -293,6 +301,7 @@ Panel {
           }
 
           DashboardSection {
+            id: notificationsSection
             title: "UNREAD NOTIFICATIONS"
             count: github.notifications.length
             emptyText: github.state === "ready" ? "You're all caught up." : "No notifications loaded."
@@ -301,6 +310,13 @@ Panel {
             openUrl: "https://github.com/notifications"
             onToggleExpanded: root.notificationsExpanded = !root.notificationsExpanded
             delegateComponent: notificationDelegate
+            actionText: "Mark all read"
+            actionBusyText: "Marking…"
+            actionEnabled: github.state === "ready" && !github.loading
+            actionBusy: github.marking
+            actionRevision: github.notificationsRevision
+            actionPrepare: function() { return github.prepareMarkAllNotificationsRead() }
+            onActionTriggered: function(prepared) { github.markAllNotificationsRead(prepared) }
           }
 
           DashboardSection {
@@ -590,7 +606,32 @@ Panel {
     property Component delegateComponent: null
     property bool expanded: false
     property string openUrl: ""
+    // Optional destructive action. It arms on the first click and only runs on
+    // the second, so a stray click cannot clear the section.
+    property string actionText: ""
+    property string actionConfirmText: "Confirm?"
+    property string actionBusyText: ""
+    property bool actionEnabled: false
+    property bool actionBusy: false
+    property bool actionArmed: false
+    property int actionRevision: 0
+    property var actionPrepare: null
+    property string preparedAction: ""
     signal toggleExpanded()
+    signal actionTriggered(string prepared)
+
+    function disarmAction() {
+      section.actionArmed = false
+      section.preparedAction = ""
+      actionArmTimer.stop()
+    }
+
+    // An armed confirmation must not outlive the button being clickable, or it
+    // would fire on the first click once the button comes back.
+    onActionBusyChanged: if (section.actionBusy) section.disarmAction()
+    onActionEnabledChanged: if (!section.actionEnabled) section.disarmAction()
+    onActionRevisionChanged: if (section.actionArmed) section.disarmAction()
+
     width: parent ? parent.width : 0
     spacing: Style.space(8)
 
@@ -615,11 +656,24 @@ Panel {
       spacing: Style.space(4)
       Repeater { model: section.model; delegate: section.delegateComponent }
     }
+    Timer {
+      id: actionArmTimer
+      interval: 4000
+      repeat: false
+      onTriggered: section.actionArmed = false
+    }
     Row {
-      visible: section.count > root.activityPreviewCount
+      id: sectionFooter
+      // Expanding is only offered once the section is truncated; below that
+      // threshold the remaining controls render unbordered on their own line.
+      readonly property bool expandable: section.count > root.activityPreviewCount
+      readonly property bool showOpen: section.count > 0 && section.openUrl !== ""
+      readonly property bool showAction: section.count > 0 && section.actionEnabled && section.actionText !== ""
+      visible: expandable || showOpen || showAction
       anchors.horizontalCenter: parent.horizontalCenter
       spacing: Style.space(12)
       Button {
+        visible: sectionFooter.expandable
         text: section.expanded ? "Show less" : (section.count > root.activityExpandedCount ? "Show 25" : "Show all " + section.count)
         bordered: true
         foreground: root.foreground
@@ -629,26 +683,46 @@ Panel {
         onClicked: section.toggleExpanded()
       }
       Button {
-        visible: section.openUrl !== ""
+        id: actionButton
+        // The confirm and busy labels are shorter than the idle one. Letting the
+        // button shrink would slide its neighbours under a pointer that is about
+        // to click again, so the widest label seen so far sets the width.
+        property real reservedWidth: 0
+        onImplicitWidthChanged: reservedWidth = Math.max(reservedWidth, implicitWidth)
+        width: Math.max(reservedWidth, implicitWidth)
+        visible: sectionFooter.showAction
+        enabled: !section.actionBusy
+        text: section.actionBusy ? section.actionBusyText : (section.actionArmed ? section.actionConfirmText : section.actionText)
+        bordered: sectionFooter.expandable
+        foreground: section.actionArmed ? root.urgent : root.foreground
+        fontFamily: root.fontFamily
+        fontSize: Style.font.caption
+        verticalPadding: Style.spacing.controlPaddingY
+        onClicked: {
+          if (section.actionBusy) return
+          if (!section.actionArmed) {
+            var prepared = section.actionPrepare ? String(section.actionPrepare() || "") : "confirmed"
+            if (prepared === "") return
+            section.preparedAction = prepared
+            section.actionArmed = true
+            actionArmTimer.restart()
+            return
+          }
+          var confirmed = section.preparedAction
+          section.disarmAction()
+          section.actionTriggered(confirmed)
+        }
+      }
+      Button {
+        visible: sectionFooter.showOpen
         text: "Open in GitHub  󰅂"
-        bordered: true
+        bordered: sectionFooter.expandable
         foreground: root.foreground
         fontFamily: root.fontFamily
         fontSize: Style.font.caption
         verticalPadding: Style.spacing.controlPaddingY
         onClicked: root.openUrl(section.openUrl)
       }
-    }
-    Button {
-      visible: section.count > 0 && section.count <= root.activityPreviewCount && section.openUrl !== ""
-      anchors.horizontalCenter: parent.horizontalCenter
-      text: "Open in GitHub  󰅂"
-      bordered: false
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-      fontSize: Style.font.caption
-      verticalPadding: Style.spacing.controlPaddingY
-      onClicked: root.openUrl(section.openUrl)
     }
   }
 
@@ -723,7 +797,7 @@ Panel {
       }
       PanelActionButton {
         visible: linkRow.showReadAction
-        enabled: github.markingNotificationId === ""
+        enabled: !github.loading && !github.marking
         iconText: github.markingNotificationId === linkRow.notificationId ? "󰑐" : "󰄬"
         tooltipText: "Mark this notification read (M)"
         foreground: root.foreground
