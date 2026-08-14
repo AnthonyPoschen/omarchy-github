@@ -12,6 +12,7 @@ The dashboard is ordered by urgency so the most actionable work appears first:
 
 - **Unread notifications** — open the related thread or mark it read in place
 - **Review requests** — see pull requests waiting on your review
+- **My pull requests** — track the pull requests you opened and the state of their checks
 - **Assigned issues** — keep track of open issues assigned to you
 - **Active GitHub Actions** — monitor queued, pending, requested, waiting, and running workflows
 - **Recent workflow failures** — jump directly to failed, timed-out, or action-required runs
@@ -148,6 +149,7 @@ From an existing checkout, validate and test the plugin:
 ```bash
 omarchy plugin validate .
 tests/helper-test.sh
+tests/panel-source-test.sh
 ```
 
 Install that checkout for local iteration:
@@ -165,6 +167,7 @@ The shell watches local plugin files, making QML iteration fast.
 - GraphQL retrieves every owned repository and exact aggregate counts.
 - REST retrieves notifications and workflow runs.
 - GitHub issue search retrieves review requests and assigned issues.
+- GraphQL search retrieves your authored pull requests together with the head commit's `statusCheckRollup`, so check state costs no extra request.
 - Status-specific, paginated Actions requests prevent busy repositories from hiding active runs.
 - Completed runs are server-bounded to the configured failure window.
 - Independent requests allow successful sections to remain available when one endpoint fails.

@@ -27,3 +27,6 @@ jobs:
 
       - name: Run helper tests
         run: tests/helper-test.sh
+
+      - name: Run panel source tests
+        run: tests/panel-source-test.sh

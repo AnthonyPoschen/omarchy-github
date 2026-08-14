@@ -23,6 +23,7 @@ Panel {
   property int cursorIndex: 0
   property bool notificationsExpanded: false
   property bool reviewsExpanded: false
+  property bool myPullsExpanded: false
   property bool issuesExpanded: false
   property bool actionsExpanded: false
   property bool failuresExpanded: false
@@ -53,6 +54,7 @@ Panel {
     }
     add("notification", sectionRows(github.notifications, notificationsExpanded))
     add("review", sectionRows(github.reviewRequests, reviewsExpanded))
+    add("mypull", sectionRows(github.myPullRequests, myPullsExpanded))
     add("issue", sectionRows(github.assignedIssues, issuesExpanded))
     add("action", sectionRows(github.actions, actionsExpanded))
     add("failure", sectionRows(github.failedActions, failuresExpanded))
@@ -97,6 +99,14 @@ Panel {
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
     return value === undefined || value === null ? fallback : value
+  }
+
+  function checkLabel(checks) {
+    if (checks === "SUCCESS") return "checks passing"
+    if (checks === "ERROR") return "checks errored"
+    if (github.isBrokenCheck(checks)) return "checks failing"
+    if (github.isRunningCheck(checks)) return "checks running"
+    return "no checks"
   }
 
   function openUrl(url) {
@@ -225,8 +235,11 @@ Panel {
           PanelHero {
             width: parent.width
             title: github.login !== "" ? "GitHub · " + github.login : "GitHub"
+            // Mirrors every term of the alarming state, so the summary always
+            // explains why the bar icon is lit.
             meta: github.loading ? "Refreshing dashboard…" : (github.state === "ready" ?
-              github.unreadCount + " unread · " + github.reviewRequests.length + " reviews · " + github.actionCount + " active actions" : github.message)
+              github.unreadCount + " unread · " + github.reviewRequests.length + " reviews · " + github.actionCount + " active actions"
+                + (github.failingPullRequestCount > 0 ? " · " + github.failingPullRequestCount + " failing" : "") : github.message)
             foreground: root.foreground
             fontFamily: root.fontFamily
             iconComponent: Component {
@@ -299,6 +312,20 @@ Panel {
             openUrl: "https://github.com/pulls/review-requested"
             onToggleExpanded: root.reviewsExpanded = !root.reviewsExpanded
             delegateComponent: reviewDelegate
+          }
+
+          DashboardSection {
+            visible: count > 0
+            title: "MY PULL REQUESTS"
+            // The search is capped at one page, so the fetched list can be
+            // shorter than the real total. Show the total rather than implying
+            // the section is complete.
+            count: Math.max(github.myPullRequestsTotal, github.myPullRequests.length)
+            model: root.sectionRows(github.myPullRequests, root.myPullsExpanded)
+            expanded: root.myPullsExpanded
+            openUrl: "https://github.com/pulls"
+            onToggleExpanded: root.myPullsExpanded = !root.myPullsExpanded
+            delegateComponent: myPullRequestDelegate
           }
 
           DashboardSection {
@@ -482,6 +509,29 @@ Panel {
   }
 
   Component {
+    id: myPullRequestDelegate
+    LinkRow {
+      required property var modelData
+      required property int index
+      readonly property string checks: String(modelData.checks || "NONE")
+      readonly property bool broken: github.isBrokenCheck(checks)
+      readonly property bool running: github.isRunningCheck(checks)
+      width: parent ? parent.width : 0
+      rowKind: "mypull"
+      rowIndex: index
+      rowId: String(modelData.id || modelData.url || index)
+      // A repository with no workflows reports no rollup at all, which the
+      // plain pull request glyph conveys without implying a pending run.
+      glyph: broken ? "󰅖" : (running ? "󰑮" : (checks === "SUCCESS" ? "󰄬" : ""))
+      title: modelData.title
+      detail: modelData.repository + " #" + modelData.number + (modelData.draft ? " · draft" : "") + " · " + root.checkLabel(checks) + " · " + root.relativeTime(modelData.updatedAt)
+      url: modelData.url
+      danger: broken
+      pulse: running
+    }
+  }
+
+  Component {
     id: issueDelegate
     LinkRow {
       required property var modelData
@@ -655,6 +705,7 @@ Panel {
         Text {
           Layout.fillWidth: true
           text: linkRow.title
+          textFormat: Text.PlainText
           color: root.foreground
           font.family: root.fontFamily
           font.pixelSize: Style.font.body
@@ -663,6 +714,7 @@ Panel {
         Text {
           Layout.fillWidth: true
           text: linkRow.detail
+          textFormat: Text.PlainText
           color: root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
