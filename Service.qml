@@ -13,6 +13,7 @@ Item {
     property string state: "loading"
     property string message: "Loading GitHub…"
     property string login: ""
+    property string fetchedRepositoryScope: "owned"
     property string fetchedAt: ""
     property var notifications: []
     property int notificationsRevision: 0
@@ -83,12 +84,19 @@ Item {
         return text === "true" || text === "yes" || text === "on" || text === "1";
     }
 
+    // Matched against the known options rather than by substring, so an option
+    // added later falls back to the narrower scope instead of silently widening
+    // it. `fetchedRepositoryScope` reports what the last payload contained.
+    function repositoryMode() {
+        return String(setting("repositoryScope", "Owned")).toLowerCase() === "owned and organizations" ? "organizations" : "owned";
+    }
+
     function actionMode() {
         var value = String(setting("actionScanBehavior", "Recent repositories")).toLowerCase();
         if (value === "off")
             return "off";
 
-        if (value.indexOf("all") === 0)
+        if (value === "all repositories")
             return "all";
 
         return "recent";
@@ -99,7 +107,7 @@ Item {
     }
 
     function command() {
-        return [helperPath(), "--include-archived", boolSetting("includeArchived", false) ? "true" : "false", "--include-forks", boolSetting("includeForks", false) ? "true" : "false", "--include-archived-reviews", boolSetting("includeArchivedReviewRequests", false) ? "true" : "false", "--include-draft-reviews", boolSetting("includeDraftReviewRequests", false) ? "true" : "false", "--action-scan", actionMode(), "--action-repo-limit", String(intSetting("actionScanRepoLimit", 15, 5, 200)), "--concurrency", String(intSetting("actionScanConcurrency", 6, 1, 12)), "--failed-days", String(intSetting("failedActionDays", 7, 1, 30)), "--failed-limit", String(intSetting("failedActionLimit", 20, 1, 100))];
+        return [helperPath(), "--include-archived", boolSetting("includeArchived", false) ? "true" : "false", "--include-forks", boolSetting("includeForks", false) ? "true" : "false", "--repository-scope", repositoryMode(), "--include-archived-reviews", boolSetting("includeArchivedReviewRequests", false) ? "true" : "false", "--include-draft-reviews", boolSetting("includeDraftReviewRequests", false) ? "true" : "false", "--action-scan", actionMode(), "--action-repo-limit", String(intSetting("actionScanRepoLimit", 15, 5, 200)), "--concurrency", String(intSetting("actionScanConcurrency", 6, 1, 12)), "--failed-days", String(intSetting("failedActionDays", 7, 1, 30)), "--failed-limit", String(intSetting("failedActionLimit", 20, 1, 100))];
     }
 
     function refresh() {
@@ -121,6 +129,7 @@ Item {
             state = String(data.state || "error");
             message = String(data.message || "");
             login = String(data.login || "");
+            fetchedRepositoryScope = String(data.repositoryScope || "owned");
             fetchedAt = String(data.fetchedAt || "");
             notifications = Array.isArray(data.notifications) ? data.notifications : [];
             notificationsRevision++;

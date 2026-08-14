@@ -7,6 +7,7 @@ include_archived=false
 include_forks=false
 include_archived_reviews=false
 include_draft_reviews=false
+repository_scope="owned"
 action_scan="recent"
 action_limit=15
 concurrency=6
@@ -26,6 +27,9 @@ Usage: omarchy-github-fetch [options]
                                 archived repositories (default: false)
   --include-draft-reviews BOOL  Include review requests on draft pull requests
                                 (default: false)
+  --repository-scope MODE       owned, or organizations to also list the
+                                repositories you reach through an organization
+                                (default: owned)
   --action-scan MODE            off, recent, or all (default: recent)
   --action-repo-limit N         Repositories scanned in recent mode (default: 15)
   --concurrency N               Concurrent Actions requests, 1-12 (default: 6)
@@ -48,6 +52,7 @@ while (($#)); do
     --include-forks) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; include_forks=$2; shift 2 ;;
     --include-archived-reviews) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; include_archived_reviews=$2; shift 2 ;;
     --include-draft-reviews) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; include_draft_reviews=$2; shift 2 ;;
+    --repository-scope) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; repository_scope=${2,,}; shift 2 ;;
     --action-scan) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; action_scan=${2,,}; shift 2 ;;
     --action-repo-limit) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; action_limit=$2; shift 2 ;;
     --concurrency) [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }; concurrency=$2; shift 2 ;;
@@ -66,9 +71,13 @@ integer "$concurrency" && ((concurrency >= 1 && concurrency <= 12)) || { echo "i
 integer "$failed_days" && ((failed_days >= 1 && failed_days <= 30)) || { echo "invalid --failed-days" >&2; exit 2; }
 integer "$failed_limit" && ((failed_limit >= 1 && failed_limit <= 100)) || { echo "invalid --failed-limit" >&2; exit 2; }
 [[ $action_scan == off || $action_scan == recent || $action_scan == all ]] || { echo "invalid --action-scan" >&2; exit 2; }
+[[ $repository_scope == owned || $repository_scope == organizations ]] || { echo "invalid --repository-scope" >&2; exit 2; }
+# Interpolated into the GraphQL document, so it comes from the validated enum
+# above. The argument itself never reaches the query.
+if [[ $repository_scope == organizations ]]; then owner_affiliations="[OWNER,ORGANIZATION_MEMBER]"; else owner_affiliations="OWNER"; fi
 
 emit_state() {
-  jq -n --arg state "$1" --arg message "$2" '{schemaVersion:1,state:$state,message:$message,login:"",fetchedAt:(now|todateiso8601),notifications:[],reviewRequests:[],assignedIssues:[],myPullRequests:[],myPullRequestsTotal:0,actions:[],failedActions:[],repositories:[],warnings:[],rateLimit:null}'
+  jq -n --arg state "$1" --arg message "$2" --arg scope "$repository_scope" '{schemaVersion:1,state:$state,message:$message,login:"",repositoryScope:$scope,fetchedAt:(now|todateiso8601),notifications:[],reviewRequests:[],assignedIssues:[],myPullRequests:[],myPullRequestsTotal:0,actions:[],failedActions:[],repositories:[],warnings:[],rateLimit:null}'
 }
 
 command -v jq >/dev/null 2>&1 || { printf '%s\n' '{"schemaVersion":1,"state":"error","message":"jq is required.","notifications":[],"reviewRequests":[],"assignedIssues":[],"myPullRequests":[],"myPullRequestsTotal":0,"actions":[],"failedActions":[],"repositories":[],"warnings":[]}' ; exit 0; }
@@ -232,7 +241,7 @@ cursor=null
 printf '[]\n' >"$tmp/repos.json"
 graphql_ok=true
 while :; do
-  if ! page=$(gh api graphql -f query='query($cursor:String) { viewer { login repositories(first:100,after:$cursor,ownerAffiliations:OWNER,orderBy:{field:UPDATED_AT,direction:DESC}) { nodes { name nameWithOwner url isArchived isFork stargazerCount updatedAt issues(states:OPEN){totalCount} pullRequests(states:OPEN){totalCount} } pageInfo { hasNextPage endCursor } } } rateLimit { remaining resetAt cost } }' -F cursor="$cursor" 2>"$tmp/graphql.err"); then api_error repositories "$tmp/graphql.err"; graphql_ok=false; break; fi
+  if ! page=$(gh api graphql -f query='query($cursor:String) { viewer { login repositories(first:100,after:$cursor,ownerAffiliations:'"$owner_affiliations"',orderBy:{field:UPDATED_AT,direction:DESC}) { nodes { name nameWithOwner url isArchived isFork stargazerCount updatedAt issues(states:OPEN){totalCount} pullRequests(states:OPEN){totalCount} } pageInfo { hasNextPage endCursor } } } rateLimit { remaining resetAt cost } }' -F cursor="$cursor" 2>"$tmp/graphql.err"); then api_error repositories "$tmp/graphql.err"; graphql_ok=false; break; fi
   printf '%s\n' "$page" >"$tmp/page.json"
   login=$(jq -r '.data.viewer.login // ""' "$tmp/page.json")
   jq '[.data.viewer.repositories.nodes[] | {name,nameWithOwner,url,archived:.isArchived,fork:.isFork,stars:.stargazerCount,issues:.issues.totalCount,prs:.pullRequests.totalCount,updatedAt,activeActions:0}]' "$tmp/page.json" >"$tmp/page.repos"
@@ -280,4 +289,4 @@ repo_count=$(jq 'length' "$tmp/repos.json")
 if [[ $graphql_ok == false && $repo_count -eq 0 ]]; then state=error; message="GitHub repositories could not be loaded."; else state=ready; message=""; fi
 rate_remaining=$(jq -r '.remaining // 999999' "$tmp/rate.json")
 if { [[ $rate_remaining =~ ^[0-9]+$ ]] && ((rate_remaining<=0)); } || grep -qiE 'rate.?limit|secondary rate' "$warnings"; then state=rate-limited; message="GitHub API rate limit reached."; fi
-jq -n --arg state "$state" --arg message "$message" --arg login "${login:-}" --slurpfile notifications "$tmp/notifications.json" --slurpfile reviews "$tmp/reviews.json" --slurpfile issues "$tmp/issues.json" --slurpfile mypulls "$tmp/mypulls.json" --slurpfile mypullstotal "$tmp/mypulls-total.json" --slurpfile actions "$tmp/actions.json" --slurpfile failed "$tmp/failed.json" --slurpfile repositories "$tmp/repos.json" --argjson warnings "$warnings_json" --slurpfile rate "$tmp/rate.json" '{schemaVersion:1,state:$state,message:$message,login:$login,fetchedAt:(now|todateiso8601),notifications:$notifications[0],reviewRequests:$reviews[0],assignedIssues:$issues[0],myPullRequests:$mypulls[0],myPullRequestsTotal:$mypullstotal[0],actions:$actions[0],failedActions:$failed[0],repositories:$repositories[0],warnings:$warnings,rateLimit:$rate[0]}'
+jq -n --arg state "$state" --arg message "$message" --arg login "${login:-}" --arg scope "$repository_scope" --slurpfile notifications "$tmp/notifications.json" --slurpfile reviews "$tmp/reviews.json" --slurpfile issues "$tmp/issues.json" --slurpfile mypulls "$tmp/mypulls.json" --slurpfile mypullstotal "$tmp/mypulls-total.json" --slurpfile actions "$tmp/actions.json" --slurpfile failed "$tmp/failed.json" --slurpfile repositories "$tmp/repos.json" --argjson warnings "$warnings_json" --slurpfile rate "$tmp/rate.json" '{schemaVersion:1,state:$state,message:$message,login:$login,repositoryScope:$scope,fetchedAt:(now|todateiso8601),notifications:$notifications[0],reviewRequests:$reviews[0],assignedIssues:$issues[0],myPullRequests:$mypulls[0],myPullRequestsTotal:$mypullstotal[0],actions:$actions[0],failedActions:$failed[0],repositories:$repositories[0],warnings:$warnings,rateLimit:$rate[0]}'
