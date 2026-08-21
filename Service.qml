@@ -48,7 +48,8 @@ Item {
     readonly property int failingPullRequestCount: myPullRequests.filter(function(item) {
         return !item.draft && root.isBrokenCheck(item.checks);
     }).length
-    readonly property bool alarming: unreadCount > 0 || actionCount > 0 || reviewRequests.length > 0 || failingPullRequestCount > 0
+    readonly property bool iconAlwaysUnlit: boolSetting("iconAlwaysUnlit", false)
+    readonly property bool alarming: !iconAlwaysUnlit && (unreadCount > 0 || actionCount > 0 || reviewRequests.length > 0 || failingPullRequestCount > 0)
 
     // StatusCheckRollup groupings live here so the alarming count, the row label
     // and the row glyph cannot drift apart when a state is reclassified.
