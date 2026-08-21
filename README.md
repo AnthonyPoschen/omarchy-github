@@ -146,6 +146,7 @@ Configure the widget through Omarchy's bar widget settings. Existing installatio
 | Actions request concurrency | 6 |
 | Failed Actions window | 7 days |
 | Maximum failed Actions | 20 |
+| Keep the bar icon unlit | Off |
 
 **Repository scope** controls both the repository dashboard and the candidate repositories for Actions scanning. **Owned and organizations** is opt-in. With the default **Recent repositories** scan, Actions requests remain capped to the 15 most recently updated repositories in that wider scope.
 

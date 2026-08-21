@@ -30,7 +30,8 @@
       "actionScanRepoLimit": 15,
       "actionScanConcurrency": 6,
       "failedActionDays": 7,
-      "failedActionLimit": 20
+      "failedActionLimit": 20,
+      "iconAlwaysUnlit": false
     },
     "schema": [
       { "key": "refreshIntervalSec", "type": "integer", "label": "Refresh interval (seconds)", "min": 60, "max": 3600, "step": 60, "defaultValue": 900 },
@@ -44,7 +45,8 @@
       { "key": "actionScanRepoLimit", "type": "integer", "label": "Recent repository scan limit", "min": 5, "max": 200, "step": 5, "defaultValue": 15 },
       { "key": "actionScanConcurrency", "type": "integer", "label": "Actions scan concurrency", "min": 1, "max": 12, "step": 1, "defaultValue": 6 },
       { "key": "failedActionDays", "type": "integer", "label": "Failed Actions window (days)", "min": 1, "max": 30, "step": 1, "defaultValue": 7 },
-      { "key": "failedActionLimit", "type": "integer", "label": "Maximum failed Actions", "min": 1, "max": 100, "step": 5, "defaultValue": 20 }
+      { "key": "failedActionLimit", "type": "integer", "label": "Maximum failed Actions", "min": 1, "max": 100, "step": 5, "defaultValue": 20 },
+      { "key": "iconAlwaysUnlit", "type": "boolean", "label": "Keep the bar icon unlit", "defaultValue": false, "description": "Keep the bar icon unlit regardless of unread notifications, active actions, review requests, or failing PR checks. Counts and rows still populate the panel as usual." }
     ]
   }
 }
