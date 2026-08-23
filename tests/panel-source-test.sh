@@ -38,10 +38,10 @@ assert_contains $'PanelActionButton {\n        visible: linkRow.showReadAction\n
 
 assert_contains $'function applyPanelWheel(event) {\n    if (!panelFlick || (sortPicker && sortPicker.popup.visible)) return false' \
   "the panel still uses Flickable's default wheel distance"
-assert_contains $'panelFlick.contentY = Math.max(0, Math.min(maxY, panelFlick.contentY - wheel.steps * Style.space(64)))' \
+assert_contains $'panelFlick.contentY = Math.max(0, Math.min(maxY, panelFlick.contentY - wheel.steps * Style.space(80)))' \
   "a mouse-wheel notch does not move about one row"
-assert_contains $'WheelHandler {\n        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad' \
-  "wheel events over rows are not handled above the MouseAreas"
+assert_contains $'ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }\n        // Must be a direct child of Flickable or Qt keeps the default\n        // 1–2px wheel distance and this handler never runs.\n        WheelHandler {\n          acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad' \
+  "the wheel handler is not a direct child of the panel Flickable"
 
 assert_contains 'github.fetchedRepositoryScope === "owned" ? "OWNED REPOSITORIES  " : "REPOSITORIES  "' \
   "the repository heading does not follow the fetched scope"
