@@ -25,10 +25,14 @@ assert_contains $'onActionBusyChanged: if (section.actionBusy) section.disarmAct
   "bulk confirmation is not invalidated when notification state changes"
 assert_contains $'var confirmed = section.preparedAction\n          section.disarmAction()\n          section.actionTriggered(confirmed)' \
   "bulk action does not submit the originally prepared snapshot"
-assert_contains $'function markSelectedRead() {\n    if (github.loading || github.marking) return' \
-  "keyboard notification marking is enabled during refresh"
-assert_contains $'PanelActionButton {\n        visible: linkRow.showReadAction\n        enabled: !github.loading && !github.marking' \
-  "notification row marking is enabled during refresh"
+assert_contains $'function activateCursor() {\n    if (!selectedTarget) return\n    if (selectedTarget.kind === "notification") github.markNotificationRead(String(selectedTarget.row.id || ""))\n    openUrl(selectedTarget.row.url)' \
+  "opening a notification from the keyboard does not mark it read"
+assert_contains $'function markSelectedRead() {\n    if (selectedTarget && selectedTarget.kind === "notification") github.markNotificationRead(String(selectedTarget.row.id || ""))' \
+  "keyboard notification marking is blocked during refresh"
+assert_contains $'onClicked: {\n        if (linkRow.showReadAction) github.markNotificationRead(linkRow.notificationId)\n        root.openUrl(linkRow.url)' \
+  "clicking a notification does not mark it read"
+assert_contains $'PanelActionButton {\n        visible: linkRow.showReadAction\n        enabled: github.markingNotificationId !== linkRow.notificationId' \
+  "notification row marking is disabled during refresh"
 
 assert_contains 'github.fetchedRepositoryScope === "owned" ? "OWNED REPOSITORIES  " : "REPOSITORIES  "' \
   "the repository heading does not follow the fetched scope"

@@ -34,6 +34,11 @@ Item {
     property string notificationActionStatus: ""
     property string _markStdout: ""
     property string _markStderr: ""
+    // Thread IDs waiting for PATCH after GitHub confirmed them locally. An
+    // in-flight refresh must not restore these rows, or the bar stays lit until
+    // the next poll even though the user already opened or marked the thread.
+    property var hiddenNotifications: ({})
+    property var markQueue: []
     // Single-thread and bulk marking share one process, so the panel gates every
     // entry point on this rather than on whichever flag a given call happens to
     // set. A caller added later inherits the guard instead of having to know.
@@ -111,8 +116,108 @@ Item {
         return [helperPath(), "--include-archived", boolSetting("includeArchived", false) ? "true" : "false", "--include-forks", boolSetting("includeForks", false) ? "true" : "false", "--repository-scope", repositoryMode(), "--include-archived-reviews", boolSetting("includeArchivedReviewRequests", false) ? "true" : "false", "--include-draft-reviews", boolSetting("includeDraftReviewRequests", false) ? "true" : "false", "--action-scan", actionMode(), "--action-repo-limit", String(intSetting("actionScanRepoLimit", 15, 5, 200)), "--concurrency", String(intSetting("actionScanConcurrency", 6, 1, 12)), "--failed-days", String(intSetting("failedActionDays", 7, 1, 30)), "--failed-limit", String(intSetting("failedActionLimit", 20, 1, 100))];
     }
 
+    function copyMap(value) {
+        var copy = {};
+        var source = value || {};
+        for (var key in source)
+            copy[key] = source[key];
+        return copy;
+    }
+
+    function hideNotification(id) {
+        var value = String(id || "");
+        if (value === "")
+            return ;
+
+        var hidden = copyMap(hiddenNotifications);
+        var next = [];
+        var found = false;
+        for (var i = 0; i < notifications.length; i++) {
+            var item = notifications[i];
+            if (String(item.id || "") === value) {
+                hidden[value] = item;
+                found = true;
+            } else {
+                next.push(item);
+            }
+        }
+        if (!found && hidden[value] === undefined)
+            hidden[value] = {id: value};
+
+        hiddenNotifications = hidden;
+        if (found) {
+            notifications = next;
+            notificationsRevision++;
+        }
+    }
+
+    function restoreHiddenNotification(id) {
+        var value = String(id || "");
+        var item = hiddenNotifications[value];
+        var hidden = copyMap(hiddenNotifications);
+        delete hidden[value];
+        hiddenNotifications = hidden;
+        if (!item)
+            return ;
+
+        for (var i = 0; i < notifications.length; i++) {
+            if (String(notifications[i].id || "") === value)
+                return ;
+        }
+        notifications = [item].concat(notifications);
+        notificationsRevision++;
+    }
+
+    function visibleNotifications(rows) {
+        var incoming = Array.isArray(rows) ? rows : [];
+        var hidden = hiddenNotifications || {};
+        var nextHidden = {};
+        var visible = [];
+        for (var i = 0; i < incoming.length; i++) {
+            var item = incoming[i];
+            var id = String(item.id || "");
+            if (hidden[id])
+                nextHidden[id] = item;
+            else
+                visible.push(item);
+        }
+        hiddenNotifications = nextHidden;
+        return visible;
+    }
+
+    function enqueueMark(id) {
+        var value = String(id || "");
+        if (value === "" || markingNotificationId === value)
+            return ;
+
+        for (var i = 0; i < markQueue.length; i++) {
+            if (markQueue[i] === value)
+                return ;
+        }
+        markQueue = markQueue.concat([value]);
+    }
+
+    function startQueuedMark() {
+        if (fetchProcess.running || markProcess.running || markQueue.length === 0)
+            return false;
+
+        var value = String(markQueue[0] || "");
+        markQueue = markQueue.slice(1);
+        if (value === "")
+            return startQueuedMark();
+
+        actionStatusTimer.stop();
+        markingNotificationId = value;
+        notificationActionStatus = "Marking notification read…";
+        _markStdout = "";
+        _markStderr = "";
+        markProcess.command = [helperPath(), "--mark-notification-read", value];
+        markProcess.running = true;
+        return true;
+    }
+
     function refresh() {
-        if (fetchProcess.running || markProcess.running) {
+        if (fetchProcess.running || markProcess.running || markQueue.length > 0) {
             refreshQueued = true;
             return ;
         }
@@ -132,7 +237,7 @@ Item {
             login = String(data.login || "");
             fetchedRepositoryScope = String(data.repositoryScope || "owned");
             fetchedAt = String(data.fetchedAt || "");
-            notifications = Array.isArray(data.notifications) ? data.notifications : [];
+            notifications = visibleNotifications(data.notifications);
             notificationsRevision++;
             reviewRequests = Array.isArray(data.reviewRequests) ? data.reviewRequests : [];
             assignedIssues = Array.isArray(data.assignedIssues) ? data.assignedIssues : [];
@@ -152,16 +257,15 @@ Item {
 
     function markNotificationRead(id) {
         var value = String(id || "");
-        if (value === "" || loading || fetchProcess.running || markProcess.running)
+        if (value === "")
             return ;
 
-        actionStatusTimer.stop();
-        markingNotificationId = value;
-        notificationActionStatus = "Marking notification read…";
-        _markStdout = "";
-        _markStderr = "";
-        markProcess.command = [helperPath(), "--mark-notification-read", value];
-        markProcess.running = true;
+        // Drop the row before GitHub round-trips. Opening a thread while a
+        // refresh is already running used to no-op, so the icon stayed alarming
+        // until the next poll even after the user had seen the notification.
+        hideNotification(value);
+        enqueueMark(value);
+        startQueuedMark();
     }
 
     function canonicalNotificationTimestamp(value) {
@@ -277,6 +381,9 @@ Item {
                 root.state = "error";
                 root.message = stderr !== "" ? stderr : "GitHub data refresh failed.";
             }
+            if (root.startQueuedMark())
+                return ;
+
             if (root.refreshQueued) {
                 root.refreshQueued = false;
                 Qt.callLater(root.refresh);
@@ -311,15 +418,21 @@ Item {
             } catch (error) {
             }
             var all = root.markingAllNotifications;
+            var markedId = root.markingNotificationId;
             if (exitCode === 0 && response && response.state === "ready") {
                 root.notificationActionStatus = all ? "Notifications marked read. Refreshing…" : "Notification marked read. Refreshing…";
             } else {
                 var fallback = all ? "Could not mark all notifications read." : "Could not mark notification read.";
                 root.notificationActionStatus = response && response.message ? String(response.message) : String(markErrors.text || root._markStderr || fallback).trim();
+                if (!all && markedId !== "")
+                    root.restoreHiddenNotification(markedId);
             }
             root.markingNotificationId = "";
             root.markingAllNotifications = false;
             actionStatusTimer.restart();
+            if (root.startQueuedMark())
+                return ;
+
             // GitHub is authoritative after every attempt. This reconciles
             // successful, failed, and partially completed bulk operations.
             root.refreshQueued = false;

@@ -21,12 +21,16 @@ assert_not_contains() {
   [[ $SERVICE_SOURCE != *"$1"* ]] || fail "$2"
 }
 
-assert_contains $'function refresh() {\n        if (fetchProcess.running || markProcess.running) {\n            refreshQueued = true;\n            return ;\n        }' \
+assert_contains $'function refresh() {\n        if (fetchProcess.running || markProcess.running || markQueue.length > 0) {\n            refreshQueued = true;\n            return ;\n        }' \
   "refresh and notification marking are not serialized"
-assert_contains $'notifications = Array.isArray(data.notifications) ? data.notifications : [];\n            notificationsRevision++;' \
+assert_contains $'notifications = visibleNotifications(data.notifications);\n            notificationsRevision++;' \
   "notification refreshes do not invalidate prepared confirmations"
-assert_contains $'function markNotificationRead(id) {\n        var value = String(id || "");\n        if (value === "" || loading || fetchProcess.running || markProcess.running)' \
-  "single-notification marking is not blocked during refresh"
+assert_contains $'hideNotification(value);\n        enqueueMark(value);\n        startQueuedMark();' \
+  "single-notification marking is dropped during refresh"
+assert_contains 'notifications = [item].concat(notifications);' \
+  "failed notification marking does not restore the hidden row"
+assert_not_contains $'if (value === "" || loading || fetchProcess.running || markProcess.running)' \
+  "single-notification marking is still blocked during refresh"
 assert_contains $'function canonicalNotificationTimestamp(value) {\n        var text = String(value || "");\n        if (!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$/.test(text))\n            return "";' \
   "notification boundaries are not shape validated"
 assert_contains 'return milliseconds <= Date.now() ? text : "";' \
