@@ -27,6 +27,10 @@ Panel {
   property bool issuesExpanded: false
   property bool actionsExpanded: false
   property bool failuresExpanded: false
+  // Carry sub-notch wheel deltas between events. Touchpads emit many small
+  // angleDeltas; mice often emit a fake 1–2px pixelDelta that would otherwise
+  // crawl the dashboard a couple of pixels per click.
+  property real wheelAccumulator: 0
   readonly property int activityPreviewCount: 5
   readonly property int activityExpandedCount: 25
   readonly property var metricFilters: [
@@ -90,6 +94,27 @@ Panel {
   }
   function markSelectedRead() {
     if (selectedTarget && selectedTarget.kind === "notification") github.markNotificationRead(String(selectedTarget.row.id || ""))
+  }
+  function applyPanelWheel(event) {
+    if (!panelFlick || (sortPicker && sortPicker.popup.visible)) return false
+    var maxY = Math.max(0, panelFlick.contentHeight - panelFlick.height)
+    if (maxY <= 0) return false
+    var pixel = event.pixelDelta.y
+    var angle = event.angleDelta.y
+    // Genuine pixel scrolling (touchpad) reports a pixelDelta larger than
+    // Qt's angle-to-pixel conversion. Discrete mice on Wayland often report
+    // both a 120° notch and a tiny pixelDelta; preferring that pixelDelta
+    // is what made each click crawl.
+    if (Math.abs(pixel) > Math.abs(angle) / 8) {
+      root.wheelAccumulator = 0
+      panelFlick.contentY = Math.max(0, Math.min(maxY, panelFlick.contentY - pixel))
+      return true
+    }
+    var wheel = Util.wheelSteps(root.wheelAccumulator, angle)
+    root.wheelAccumulator = wheel.remainder
+    if (wheel.steps === 0) return false
+    panelFlick.contentY = Math.max(0, Math.min(maxY, panelFlick.contentY - wheel.steps * Style.space(64)))
+    return true
   }
   function scrollItemIntoView(item) {
     if (!panelFlick || !item) return
@@ -215,6 +240,12 @@ Panel {
       anchors.fill: parent
       blocked: search.activeFocus || sortPicker.popup.visible
       onMoveRequested: function(dx, dy) { if (dy !== 0) root.moveCursor(dy) }
+      WheelHandler {
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        onWheel: function(event) {
+          if (root.applyPanelWheel(event)) event.accepted = true
+        }
+      }
       onActivateRequested: root.activateCursor()
       onCloseRequested: root.close()
       // Tab enters the native control chain so search, filters, sorting, and
@@ -414,6 +445,7 @@ Panel {
             contentHeight: height
             clip: true
             flickableDirection: Flickable.HorizontalFlick
+            interactive: contentWidth > width
             Row {
               id: filterRow
               spacing: Style.space(6)

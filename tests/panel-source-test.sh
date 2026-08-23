@@ -36,6 +36,13 @@ assert_contains $'onClicked: root.openRow(linkRow.rowKind, linkRow.notificationI
 assert_contains $'PanelActionButton {\n        visible: linkRow.showReadAction\n        enabled: github.markingNotificationId !== linkRow.notificationId' \
   "notification row marking is disabled during refresh"
 
+assert_contains $'function applyPanelWheel(event) {\n    if (!panelFlick || (sortPicker && sortPicker.popup.visible)) return false' \
+  "the panel still uses Flickable's default wheel distance"
+assert_contains $'panelFlick.contentY = Math.max(0, Math.min(maxY, panelFlick.contentY - wheel.steps * Style.space(64)))' \
+  "a mouse-wheel notch does not move about one row"
+assert_contains $'WheelHandler {\n        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad' \
+  "wheel events over rows are not handled above the MouseAreas"
+
 assert_contains 'github.fetchedRepositoryScope === "owned" ? "OWNED REPOSITORIES  " : "REPOSITORIES  "' \
   "the repository heading does not follow the fetched scope"
 assert_contains '"No repositories loaded."' \
