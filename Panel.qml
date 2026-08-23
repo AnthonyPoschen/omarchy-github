@@ -78,8 +78,15 @@ Panel {
   }
   function activateCursor() {
     if (!selectedTarget) return
-    if (selectedTarget.kind === "notification") github.markNotificationRead(String(selectedTarget.row.id || ""))
-    openUrl(selectedTarget.row.url)
+    openRow(selectedTarget.kind, selectedTarget.row.id, selectedTarget.row.url)
+  }
+  // Snapshot id/url before marking. hideNotification destroys the row, and
+  // reading linkRow.url after that leaves openUrl with an empty target.
+  function openRow(kind, id, url) {
+    var target = String(url || "")
+    var notificationId = String(id || "")
+    openUrl(target)
+    if (kind === "notification") github.markNotificationRead(notificationId)
   }
   function markSelectedRead() {
     if (selectedTarget && selectedTarget.kind === "notification") github.markNotificationRead(String(selectedTarget.row.id || ""))
@@ -752,10 +759,7 @@ Panel {
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
       onEntered: root.selectKey(linkRow.cursorKey)
-      onClicked: {
-        if (linkRow.showReadAction) github.markNotificationRead(linkRow.notificationId)
-        root.openUrl(linkRow.url)
-      }
+      onClicked: root.openRow(linkRow.rowKind, linkRow.notificationId || linkRow.rowId, linkRow.url)
     }
     RowLayout {
       id: row
