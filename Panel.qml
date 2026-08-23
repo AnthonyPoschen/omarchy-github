@@ -78,10 +78,10 @@ Panel {
   }
   function activateCursor() {
     if (!selectedTarget) return
+    if (selectedTarget.kind === "notification") github.markNotificationRead(String(selectedTarget.row.id || ""))
     openUrl(selectedTarget.row.url)
   }
   function markSelectedRead() {
-    if (github.loading || github.marking) return
     if (selectedTarget && selectedTarget.kind === "notification") github.markNotificationRead(String(selectedTarget.row.id || ""))
   }
   function scrollItemIntoView(item) {
@@ -752,7 +752,10 @@ Panel {
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
       onEntered: root.selectKey(linkRow.cursorKey)
-      onClicked: root.openUrl(linkRow.url)
+      onClicked: {
+        if (linkRow.showReadAction) github.markNotificationRead(linkRow.notificationId)
+        root.openUrl(linkRow.url)
+      }
     }
     RowLayout {
       id: row
@@ -799,7 +802,7 @@ Panel {
       }
       PanelActionButton {
         visible: linkRow.showReadAction
-        enabled: !github.loading && !github.marking
+        enabled: github.markingNotificationId !== linkRow.notificationId
         iconText: github.markingNotificationId === linkRow.notificationId ? "󰑐" : "󰄬"
         tooltipText: "Mark this notification read (M)"
         foreground: root.foreground

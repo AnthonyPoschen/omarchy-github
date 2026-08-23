@@ -100,8 +100,8 @@ omarchy plugin remove robzolkos.github
 | --- | --- |
 | Left click Octocat | Open or close the dashboard |
 | Right or middle click Octocat | Refresh |
-| Click a row | Open it on GitHub |
-| Check button on a notification | Mark the thread read after GitHub confirms it |
+| Click a row | Open it on GitHub; notification rows are also marked read |
+| Check button on a notification | Mark the thread read immediately, then confirm with GitHub |
 | **Mark all read** in the notifications footer | Arm the bulk mark-as-read |
 | **Confirm?** on the armed button | Mark every notification on screen read |
 | `j` / `k` or arrow keys | Move through visible rows |
