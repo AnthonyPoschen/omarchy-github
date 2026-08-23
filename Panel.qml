@@ -147,7 +147,9 @@ Panel {
   function openUrl(url) {
     var value = String(url || "")
     if (value === "") return
-    Quickshell.execDetached(["omarchy-launch-browser", value])
+    // Hand the URL to the existing browser so it becomes a tab. omarchy-launch-browser
+    // starts a new uwsm unit per click, which Brave/Chromium often turn into a window.
+    Quickshell.execDetached(["xdg-open", value])
     close()
   }
 
