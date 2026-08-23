@@ -100,7 +100,7 @@ omarchy plugin remove robzolkos.github
 | --- | --- |
 | Left click Octocat | Open or close the dashboard |
 | Right or middle click Octocat | Refresh |
-| Click a row | Open it on GitHub; notification rows are also marked read |
+| Click a row | Open it on GitHub in a web app window; notification rows are also marked read |
 | Check button on a notification | Mark the thread read immediately, then confirm with GitHub |
 | **Mark all read** in the notifications footer | Arm the bulk mark-as-read |
 | **Confirm?** on the armed button | Mark every notification on screen read |
@@ -111,6 +111,8 @@ omarchy plugin remove robzolkos.github
 | `r` | Refresh |
 | `Escape` in search | Clear search and return to row navigation |
 | `Escape` elsewhere | Close the panel |
+
+Rows open through `omarchy-launch-webapp`, so GitHub gets a dedicated app window rather than a tab in an already-crowded browser. That helper targets Chromium-based default browsers and falls back to `chromium.desktop`, so a machine without any Chromium-based browser installed will not open links.
 
 Activity sections show five items initially and expand to a bounded list of 25. **Open in GitHub** takes you to the corresponding complete GitHub view where one is available.
 
