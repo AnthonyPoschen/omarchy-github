@@ -94,20 +94,22 @@ Panel {
     if (maxY <= 0) return false
     var pixel = event.pixelDelta.y
     var angle = event.angleDelta.y
-    // Genuine pixel scrolling (touchpad) reports a pixelDelta larger than
-    // Qt's angle-to-pixel conversion. Discrete mice on Wayland often report
-    // both a 120° notch and a tiny pixelDelta; preferring that pixelDelta
-    // is what made each click crawl.
-    if (Math.abs(pixel) > Math.abs(angle) / 8) {
-      root.wheelAccumulator = 0
-      panelFlick.contentY = Math.max(0, Math.min(maxY, panelFlick.contentY - pixel))
-      return true
-    }
     var wheel = Util.wheelSteps(root.wheelAccumulator, angle)
     root.wheelAccumulator = wheel.remainder
-    if (wheel.steps === 0) return false
-    panelFlick.contentY = Math.max(0, Math.min(maxY, panelFlick.contentY - wheel.steps * Style.space(64)))
-    return true
+    // A mouse notch is 120°. Move about one dashboard row per notch.
+    if (wheel.steps !== 0) {
+      panelFlick.contentY = Math.max(0, Math.min(maxY, panelFlick.contentY - wheel.steps * Style.space(80)))
+      return true
+    }
+    // Touchpads report a real pixelDelta larger than Qt's angle conversion.
+    // Scale it so two-finger scroll matches the notch distance above.
+    if (pixel !== 0 && Math.abs(pixel) > Math.abs(angle) / 8) {
+      root.wheelAccumulator = 0
+      panelFlick.contentY = Math.max(0, Math.min(maxY, panelFlick.contentY - pixel * 3))
+      return true
+    }
+    // Swallow leftover high-res angle crumbs so Flickable cannot crawl 1–2px.
+    return angle !== 0 || pixel !== 0
   }
   function scrollItemIntoView(item) {
     if (!panelFlick || !item) return
@@ -233,12 +235,6 @@ Panel {
       anchors.fill: parent
       blocked: search.activeFocus || sortPicker.popup.visible
       onMoveRequested: function(dx, dy) { if (dy !== 0) root.moveCursor(dy) }
-      WheelHandler {
-        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-        onWheel: function(event) {
-          if (root.applyPanelWheel(event)) event.accepted = true
-        }
-      }
       onActivateRequested: root.activateCursor()
       onCloseRequested: root.close()
       // Tab enters the native control chain so search, filters, sorting, and
@@ -263,6 +259,16 @@ Panel {
         flickableDirection: Flickable.VerticalFlick
         interactive: contentHeight > height
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+        // Must be a direct child of Flickable or Qt keeps the default
+        // 1–2px wheel distance and this handler never runs.
+        WheelHandler {
+          acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+          orientation: Qt.Vertical
+          grabPermissions: PointerHandler.CanTakeOverFromAnything
+          onWheel: function(event) {
+            if (root.applyPanelWheel(event)) event.accepted = true
+          }
+        }
 
         Column {
           id: content
