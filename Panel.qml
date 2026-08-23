@@ -27,6 +27,10 @@ Panel {
   property bool issuesExpanded: false
   property bool actionsExpanded: false
   property bool failuresExpanded: false
+  // Carry sub-notch wheel deltas between events. Touchpads emit many small
+  // angleDeltas; mice often emit a fake 1–2px pixelDelta that would otherwise
+  // crawl the dashboard a couple of pixels per click.
+  property real wheelAccumulator: 0
   readonly property int activityPreviewCount: 5
   readonly property int activityExpandedCount: 25
   readonly property var metricFilters: [
@@ -78,11 +82,41 @@ Panel {
   }
   function activateCursor() {
     if (!selectedTarget) return
-    openUrl(selectedTarget.row.url)
+    openRow(selectedTarget.kind, selectedTarget.row.id, selectedTarget.row.url)
+  }
+  // Snapshot id/url before marking. hideNotification destroys the row, and
+  // reading linkRow.url after that leaves openUrl with an empty target.
+  function openRow(kind, id, url) {
+    var target = String(url || "")
+    var notificationId = String(id || "")
+    openUrl(target)
+    if (kind === "notification") github.markNotificationRead(notificationId)
   }
   function markSelectedRead() {
-    if (github.loading || github.marking) return
     if (selectedTarget && selectedTarget.kind === "notification") github.markNotificationRead(String(selectedTarget.row.id || ""))
+  }
+  function applyPanelWheel(event) {
+    if (!panelFlick || (sortPicker && sortPicker.popup.visible)) return false
+    var maxY = Math.max(0, panelFlick.contentHeight - panelFlick.height)
+    if (maxY <= 0) return false
+    var pixel = event.pixelDelta.y
+    var angle = event.angleDelta.y
+    var wheel = Util.wheelSteps(root.wheelAccumulator, angle)
+    root.wheelAccumulator = wheel.remainder
+    // A mouse notch is 120°. Move about one dashboard row per notch.
+    if (wheel.steps !== 0) {
+      panelFlick.contentY = Math.max(0, Math.min(maxY, panelFlick.contentY - wheel.steps * Style.space(80)))
+      return true
+    }
+    // Touchpads report a real pixelDelta larger than Qt's angle conversion.
+    // Scale it so two-finger scroll matches the notch distance above.
+    if (pixel !== 0 && Math.abs(pixel) > Math.abs(angle) / 8) {
+      root.wheelAccumulator = 0
+      panelFlick.contentY = Math.max(0, Math.min(maxY, panelFlick.contentY - pixel * 3))
+      return true
+    }
+    // Swallow leftover high-res angle crumbs so Flickable cannot crawl 1–2px.
+    return angle !== 0 || pixel !== 0
   }
   function scrollItemIntoView(item) {
     if (!panelFlick || !item) return
@@ -113,7 +147,7 @@ Panel {
   function openUrl(url) {
     var value = String(url || "")
     if (value === "") return
-    Quickshell.execDetached(["omarchy-launch-browser", value])
+    Quickshell.execDetached(["omarchy-launch-webapp", value])
     close()
   }
 
@@ -232,6 +266,16 @@ Panel {
         flickableDirection: Flickable.VerticalFlick
         interactive: contentHeight > height
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+        // Must be a direct child of Flickable or Qt keeps the default
+        // 1–2px wheel distance and this handler never runs.
+        WheelHandler {
+          acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+          orientation: Qt.Vertical
+          grabPermissions: PointerHandler.CanTakeOverFromAnything
+          onWheel: function(event) {
+            if (root.applyPanelWheel(event)) event.accepted = true
+          }
+        }
 
         Column {
           id: content
@@ -407,6 +451,7 @@ Panel {
             contentHeight: height
             clip: true
             flickableDirection: Flickable.HorizontalFlick
+            interactive: contentWidth > width
             Row {
               id: filterRow
               spacing: Style.space(6)
@@ -752,7 +797,7 @@ Panel {
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
       onEntered: root.selectKey(linkRow.cursorKey)
-      onClicked: root.openUrl(linkRow.url)
+      onClicked: root.openRow(linkRow.rowKind, linkRow.notificationId || linkRow.rowId, linkRow.url)
     }
     RowLayout {
       id: row
@@ -799,7 +844,7 @@ Panel {
       }
       PanelActionButton {
         visible: linkRow.showReadAction
-        enabled: !github.loading && !github.marking
+        enabled: github.markingNotificationId !== linkRow.notificationId
         iconText: github.markingNotificationId === linkRow.notificationId ? "󰑐" : "󰄬"
         tooltipText: "Mark this notification read (M)"
         foreground: root.foreground
