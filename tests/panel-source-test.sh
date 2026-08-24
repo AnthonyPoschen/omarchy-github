@@ -57,8 +57,18 @@ assert_contains 'visible: root.settingsOpen' \
   "the settings page is always visible"
 assert_contains $'pageFlip.stop()\n      settingsOpen = false' \
   "closing the panel leaves it on the settings page"
-assert_contains $'PanelActionButton {\n        visible: linkRow.showReadAction\n        enabled: github.markingNotificationId !== linkRow.notificationId' \
+assert_contains $'BorderSurface {\n        visible: linkRow.showReadAction\n        Layout.alignment: Qt.AlignVCenter\n        Layout.fillHeight: true' \
   "notification row marking is disabled during refresh"
+assert_contains $'color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.14)\n        borderSpec: Border.flat(Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.42), 1)' \
+  "notification read action is not visually distinct"
+assert_contains $'function notificationRows() {\n    var page = Math.max(0, Math.min(notificationsPage, notificationPageCount() - 1))' \
+  "notifications are not paged in five-item windows"
+assert_contains $'onPreviousPage: root.notificationsPage = Math.max(0, root.notificationsPage - 1)\n            onNextPage: root.notificationsPage = Math.min(root.notificationPageCount() - 1, root.notificationsPage + 1)' \
+  "notification page controls do not clamp their range"
+assert_contains $'text: "󰅁"\n        tooltipText: "Previous notifications"' \
+  "previous notification page control is missing"
+assert_contains $'text: "󰅂"\n        tooltipText: "Next notifications"' \
+  "next notification page control is missing"
 
 assert_contains $'function applyPanelWheel(event) {\n    if (!panelFlick || (sortPicker && sortPicker.popup.visible)) return false' \
   "the panel still uses Flickable's default wheel distance"
