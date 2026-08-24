@@ -877,6 +877,7 @@ Panel {
       detail: modelData.repository + " · " + modelData.reason + " · " + root.relativeTime(modelData.updatedAt)
       url: modelData.url
       showReadAction: true
+      showTrailingIndicator: false
       notificationId: String(modelData.id || "")
     }
   }
@@ -1050,7 +1051,7 @@ Panel {
       readonly property bool expandable: section.showExpansionControl && section.count > root.activityPreviewCount
       readonly property bool paginated: section.pageCount > 1
       readonly property bool showOpen: section.count > 0 && section.openUrl !== ""
-      readonly property bool showAction: section.count > 0 && section.actionEnabled && section.actionText !== ""
+      readonly property bool showAction: section.count > 0 && section.actionText !== ""
       visible: expandable || paginated || showOpen || showAction
       anchors.horizontalCenter: parent.horizontalCenter
       spacing: Style.space(12)
@@ -1063,6 +1064,37 @@ Panel {
         fontSize: Style.font.caption
         verticalPadding: Style.spacing.controlPaddingY
         onClicked: section.toggleExpanded()
+      }
+      Button {
+        id: actionButton
+        // The confirm and busy labels are shorter than the idle one. Letting the
+        // button shrink would slide its neighbours under a pointer that is about
+        // to click again, so the widest label seen so far sets the width.
+        property real reservedWidth: 0
+        onImplicitWidthChanged: reservedWidth = Math.max(reservedWidth, implicitWidth)
+        width: Math.max(reservedWidth, implicitWidth)
+        visible: sectionFooter.showAction
+        enabled: section.actionEnabled && !section.actionBusy
+        text: section.actionBusy ? section.actionBusyText : (section.actionArmed ? section.actionConfirmText : section.actionText)
+        bordered: sectionFooter.expandable
+        foreground: section.actionArmed ? root.urgent : root.foreground
+        fontFamily: root.fontFamily
+        fontSize: Style.font.caption
+        verticalPadding: Style.spacing.controlPaddingY
+        onClicked: {
+          if (section.actionBusy) return
+          if (!section.actionArmed) {
+            var prepared = section.actionPrepare ? String(section.actionPrepare() || "") : "confirmed"
+            if (prepared === "") return
+            section.preparedAction = prepared
+            section.actionArmed = true
+            actionArmTimer.restart()
+            return
+          }
+          var confirmed = section.preparedAction
+          section.disarmAction()
+          section.actionTriggered(confirmed)
+        }
       }
       Button {
         id: previousPageButton
@@ -1099,37 +1131,6 @@ Panel {
         onClicked: section.nextPage()
       }
       Button {
-        id: actionButton
-        // The confirm and busy labels are shorter than the idle one. Letting the
-        // button shrink would slide its neighbours under a pointer that is about
-        // to click again, so the widest label seen so far sets the width.
-        property real reservedWidth: 0
-        onImplicitWidthChanged: reservedWidth = Math.max(reservedWidth, implicitWidth)
-        width: Math.max(reservedWidth, implicitWidth)
-        visible: sectionFooter.showAction
-        enabled: !section.actionBusy
-        text: section.actionBusy ? section.actionBusyText : (section.actionArmed ? section.actionConfirmText : section.actionText)
-        bordered: sectionFooter.expandable
-        foreground: section.actionArmed ? root.urgent : root.foreground
-        fontFamily: root.fontFamily
-        fontSize: Style.font.caption
-        verticalPadding: Style.spacing.controlPaddingY
-        onClicked: {
-          if (section.actionBusy) return
-          if (!section.actionArmed) {
-            var prepared = section.actionPrepare ? String(section.actionPrepare() || "") : "confirmed"
-            if (prepared === "") return
-            section.preparedAction = prepared
-            section.actionArmed = true
-            actionArmTimer.restart()
-            return
-          }
-          var confirmed = section.preparedAction
-          section.disarmAction()
-          section.actionTriggered(confirmed)
-        }
-      }
-      Button {
         visible: sectionFooter.showOpen
         text: "Open in GitHub  󰅂"
         bordered: sectionFooter.expandable
@@ -1151,6 +1152,7 @@ Panel {
     property bool pulse: false
     property bool danger: false
     property bool showReadAction: false
+    property bool showTrailingIndicator: true
     property string notificationId: ""
     property string rowKind: ""
     property int rowIndex: 0
@@ -1235,7 +1237,13 @@ Panel {
           onClicked: github.markNotificationRead(linkRow.notificationId)
         }
       }
-      Text { text: "󰅂"; color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.font.body }
+      Text {
+        visible: linkRow.showTrailingIndicator
+        text: "󰅂"
+        color: root.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.body
+      }
     }
   }
 
