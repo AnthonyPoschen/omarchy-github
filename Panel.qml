@@ -516,6 +516,7 @@ Panel {
             count: github.assignedIssues.length
             model: root.sectionRows(github.assignedIssues, root.issuesExpanded)
             expanded: root.issuesExpanded
+            footerButtonsBordered: true
             openUrl: "https://github.com/issues/assigned"
             onToggleExpanded: root.issuesExpanded = !root.issuesExpanded
             delegateComponent: issueDelegate
@@ -1053,7 +1054,7 @@ Panel {
       readonly property bool expandable: section.showExpansionControl && section.count > root.activityPreviewCount
       readonly property bool paginated: section.pageCount > 1
       readonly property bool showOpen: section.count > 0 && section.openUrl !== ""
-      readonly property bool showAction: section.count > 0 && section.actionEnabled && section.actionText !== ""
+      readonly property bool showAction: section.count > 0 && section.actionText !== ""
       visible: expandable || paginated || showOpen || showAction
       anchors.horizontalCenter: parent.horizontalCenter
       spacing: Style.space(12)
@@ -1076,7 +1077,7 @@ Panel {
         onImplicitWidthChanged: reservedWidth = Math.max(reservedWidth, implicitWidth)
         width: Math.max(reservedWidth, implicitWidth)
         visible: sectionFooter.showAction
-        enabled: !section.actionBusy
+        enabled: section.actionEnabled && !section.actionBusy
         text: section.actionBusy ? section.actionBusyText : (section.actionArmed ? section.actionConfirmText : section.actionText)
         bordered: sectionFooter.expandable || section.footerButtonsBordered
         foreground: section.actionArmed ? root.urgent : root.foreground
@@ -1175,10 +1176,10 @@ Panel {
     RowLayout {
       id: row
       anchors.left: parent.left
-      anchors.right: parent.right
+      anchors.right: readActionStrip.visible ? readActionStrip.left : parent.right
       anchors.verticalCenter: parent.verticalCenter
       anchors.leftMargin: Style.space(9)
-      anchors.rightMargin: linkRow.showReadAction ? 0 : Style.space(9)
+      anchors.rightMargin: readActionStrip.visible ? 0 : Style.space(9)
       spacing: Style.space(9)
       Text {
         text: linkRow.glyph
@@ -1215,43 +1216,44 @@ Panel {
           elide: Text.ElideRight
         }
       }
-      BorderSurface {
-        visible: linkRow.showReadAction
-        Layout.alignment: Qt.AlignVCenter
-        Layout.fillHeight: true
-        implicitWidth: Style.space(32)
-        implicitHeight: Style.space(32)
-        radius: 0
-        color: "transparent"
-        borderSpec: Border.none()
-
-        Rectangle {
-          anchors.left: parent.left
-          anchors.top: parent.top
-          anchors.bottom: parent.bottom
-          width: Style.normalBorderWidth
-          color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.16)
-        }
-
-        PanelActionButton {
-          id: readAction
-          anchors.fill: parent
-          enabled: github.markingNotificationId !== linkRow.notificationId
-          iconText: github.markingNotificationId === linkRow.notificationId ? "󰑐" : "󰄬"
-          tooltipText: "Mark this notification read (M)"
-          foreground: root.foreground
-          hoverColor: Color.accent
-          fontFamily: root.fontFamily
-          bordered: false
-          onClicked: github.markNotificationRead(linkRow.notificationId)
-        }
-      }
       Text {
         visible: linkRow.showTrailingIndicator
         text: "󰅂"
         color: root.dim
         font.family: root.fontFamily
         font.pixelSize: Style.font.body
+      }
+    }
+    BorderSurface {
+      id: readActionStrip
+      visible: linkRow.showReadAction
+      anchors.right: parent.right
+      anchors.top: parent.top
+      anchors.bottom: parent.bottom
+      width: Style.space(32)
+      radius: 0
+      color: "transparent"
+      borderSpec: Border.none()
+
+      Rectangle {
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: Style.normalBorderWidth
+        color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.16)
+      }
+
+      PanelActionButton {
+        id: readAction
+        anchors.fill: parent
+        enabled: github.markingNotificationId !== linkRow.notificationId
+        iconText: github.markingNotificationId === linkRow.notificationId ? "󰑐" : "󰄬"
+        tooltipText: "Mark this notification read (M)"
+        foreground: root.foreground
+        hoverColor: Color.accent
+        fontFamily: root.fontFamily
+        bordered: false
+        onClicked: github.markNotificationRead(linkRow.notificationId)
       }
     }
   }
