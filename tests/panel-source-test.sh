@@ -65,7 +65,7 @@ assert_contains $'function notificationRows() {\n    var page = Math.max(0, Math
   "notifications are not paged in five-item windows"
 assert_contains $'onPreviousPage: root.notificationsPage = Math.max(0, root.notificationsPage - 1)\n            onNextPage: root.notificationsPage = Math.min(root.notificationPageCount() - 1, root.notificationsPage + 1)' \
   "notification page controls do not clamp their range"
-assert_contains $'model: root.notificationRows()\n            showExpansionControl: false\n            page: root.notificationsPage' \
+assert_contains $'model: root.notificationRows()\n            showExpansionControl: false\n            footerButtonsBordered: true\n            page: root.notificationsPage' \
   "notification pagination still shows an inactive expansion control"
 assert_contains $'showReadAction: true\n      showTrailingIndicator: false\n      notificationId: String(modelData.id || "")' \
   "notification rows retain an open-link indicator beside their read action"

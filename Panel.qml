@@ -469,6 +469,7 @@ Panel {
             emptyText: github.state === "ready" ? "You're all caught up." : "No notifications loaded."
             model: root.notificationRows()
             showExpansionControl: false
+            footerButtonsBordered: true
             page: root.notificationsPage
             pageCount: root.notificationPageCount()
             openUrl: "https://github.com/notifications"
@@ -983,6 +984,7 @@ Panel {
     property Component delegateComponent: null
     property bool expanded: false
     property bool showExpansionControl: true
+    property bool footerButtonsBordered: false
     property string openUrl: ""
     property int page: 0
     property int pageCount: 1
@@ -1076,7 +1078,7 @@ Panel {
         visible: sectionFooter.showAction
         enabled: section.actionEnabled && !section.actionBusy
         text: section.actionBusy ? section.actionBusyText : (section.actionArmed ? section.actionConfirmText : section.actionText)
-        bordered: sectionFooter.expandable
+        bordered: sectionFooter.expandable || section.footerButtonsBordered
         foreground: section.actionArmed ? root.urgent : root.foreground
         fontFamily: root.fontFamily
         fontSize: Style.font.caption
@@ -1133,7 +1135,7 @@ Panel {
       Button {
         visible: sectionFooter.showOpen
         text: "Open in GitHub  󰅂"
-        bordered: sectionFooter.expandable
+        bordered: sectionFooter.expandable || section.footerButtonsBordered
         foreground: root.foreground
         fontFamily: root.fontFamily
         fontSize: Style.font.caption
