@@ -468,6 +468,7 @@ Panel {
             count: github.notifications.length
             emptyText: github.state === "ready" ? "You're all caught up." : "No notifications loaded."
             model: root.notificationRows()
+            showExpansionControl: false
             page: root.notificationsPage
             pageCount: root.notificationPageCount()
             openUrl: "https://github.com/notifications"
@@ -980,6 +981,7 @@ Panel {
     property var model: []
     property Component delegateComponent: null
     property bool expanded: false
+    property bool showExpansionControl: true
     property string openUrl: ""
     property int page: 0
     property int pageCount: 1
@@ -1045,7 +1047,7 @@ Panel {
       id: sectionFooter
       // Expanding is only offered once the section is truncated; below that
       // threshold the remaining controls render unbordered on their own line.
-      readonly property bool expandable: section.count > root.activityPreviewCount
+      readonly property bool expandable: section.showExpansionControl && section.count > root.activityPreviewCount
       readonly property bool paginated: section.pageCount > 1
       readonly property bool showOpen: section.count > 0 && section.openUrl !== ""
       readonly property bool showAction: section.count > 0 && section.actionEnabled && section.actionText !== ""
