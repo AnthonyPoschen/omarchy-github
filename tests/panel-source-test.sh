@@ -61,7 +61,7 @@ assert_contains $'id: readActionStrip\n      visible: linkRow.showReadAction\n  
   "notification read target does not fill the row height at its right edge"
 assert_contains $'anchors.right: readActionStrip.visible ? readActionStrip.left : parent.right\n      anchors.verticalCenter: parent.verticalCenter\n      anchors.leftMargin: Style.space(9)\n      anchors.rightMargin: readActionStrip.visible ? 0 : Style.space(9)' \
   "notification content does not meet the full-height read target"
-assert_contains $'borderSpec: Border.none()\n\n      Rectangle {\n        anchors.left: parent.left\n        anchors.top: parent.top\n        anchors.bottom: parent.bottom' \
+assert_contains $'borderSpec: Border.none()\n\n      HoverHandler {\n        onHoveredChanged: if (hovered) root.selectKey(linkRow.cursorKey)\n      }\n\n      Rectangle {\n        anchors.left: parent.left\n        anchors.top: parent.top\n        anchors.bottom: parent.bottom' \
   "notification read target does not use a left-only divider"
 assert_contains $'anchors.fill: parent\n        enabled: github.markingNotificationId !== linkRow.notificationId' \
   "notification read target does not fill its action strip"

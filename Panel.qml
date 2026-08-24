@@ -1235,6 +1235,10 @@ Panel {
       color: "transparent"
       borderSpec: Border.none()
 
+      HoverHandler {
+        onHoveredChanged: if (hovered) root.selectKey(linkRow.cursorKey)
+      }
+
       Rectangle {
         anchors.left: parent.left
         anchors.top: parent.top
