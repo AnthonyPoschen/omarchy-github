@@ -1053,7 +1053,7 @@ Panel {
       readonly property bool expandable: section.showExpansionControl && section.count > root.activityPreviewCount
       readonly property bool paginated: section.pageCount > 1
       readonly property bool showOpen: section.count > 0 && section.openUrl !== ""
-      readonly property bool showAction: section.count > 0 && section.actionText !== ""
+      readonly property bool showAction: section.count > 0 && section.actionEnabled && section.actionText !== ""
       visible: expandable || paginated || showOpen || showAction
       anchors.horizontalCenter: parent.horizontalCenter
       spacing: Style.space(12)
@@ -1076,7 +1076,7 @@ Panel {
         onImplicitWidthChanged: reservedWidth = Math.max(reservedWidth, implicitWidth)
         width: Math.max(reservedWidth, implicitWidth)
         visible: sectionFooter.showAction
-        enabled: section.actionEnabled && !section.actionBusy
+        enabled: !section.actionBusy
         text: section.actionBusy ? section.actionBusyText : (section.actionArmed ? section.actionConfirmText : section.actionText)
         bordered: sectionFooter.expandable || section.footerButtonsBordered
         foreground: section.actionArmed ? root.urgent : root.foreground

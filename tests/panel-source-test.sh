@@ -73,8 +73,8 @@ assert_contains $'model: root.notificationRows()\n            showExpansionContr
   "notification pagination still shows an inactive expansion control"
 assert_contains $'showReadAction: true\n      showTrailingIndicator: false\n      notificationId: String(modelData.id || "")' \
   "notification rows retain an open-link indicator beside their read action"
-assert_contains 'readonly property bool showAction: section.count > 0 && section.actionText !== ""' \
-  "bulk notification action disappears while data is loading"
+assert_contains 'readonly property bool showAction: section.count > 0 && section.actionEnabled && section.actionText !== ""' \
+  "bulk notification action no longer follows upstream readiness behavior"
 assert_contains $'text: "󰅁"\n        tooltipText: "Previous notifications"' \
   "previous notification page control is missing"
 assert_contains $'text: "󰅂"\n        tooltipText: "Next notifications"' \
