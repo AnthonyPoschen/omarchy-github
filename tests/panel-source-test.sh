@@ -59,8 +59,8 @@ assert_contains $'pageFlip.stop()\n      settingsOpen = false' \
   "closing the panel leaves it on the settings page"
 assert_contains $'BorderSurface {\n        visible: linkRow.showReadAction\n        Layout.alignment: Qt.AlignVCenter\n        Layout.fillHeight: true' \
   "notification row marking is disabled during refresh"
-assert_contains $'color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.06)\n        borderSpec: Border.flat(Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.16), 1)' \
-  "notification read action is not subtly distinct"
+assert_contains $'color: "transparent"\n        borderSpec: Border.flat(Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.16), 1)' \
+  "notification read action does not use the standard transparent background"
 assert_contains $'function notificationRows() {\n    var page = Math.max(0, Math.min(notificationsPage, notificationPageCount() - 1))' \
   "notifications are not paged in five-item windows"
 assert_contains $'onPreviousPage: root.notificationsPage = Math.max(0, root.notificationsPage - 1)\n            onNextPage: root.notificationsPage = Math.min(root.notificationPageCount() - 1, root.notificationsPage + 1)' \
