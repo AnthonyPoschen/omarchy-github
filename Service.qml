@@ -174,19 +174,29 @@ Item {
 
     function hideAllNotifications() {
         var ids = [];
+        var hidden = copyMap(hiddenNotifications);
+        var remaining = [];
         for (var i = 0; i < notifications.length; i++) {
-            var id = String(notifications[i].id || "");
-            if (id !== "")
+            var item = notifications[i];
+            var id = String(item.id || "");
+            if (id !== "") {
                 ids.push(id);
+                hidden[id] = item;
+            } else {
+                remaining.push(item);
+            }
         }
-        for (var j = 0; j < ids.length; j++)
-            hideNotification(ids[j]);
+        if (ids.length > 0) {
+            hiddenNotifications = hidden;
+            notifications = remaining;
+            notificationsRevision++;
+        }
         return ids;
     }
 
     function restoreHiddenNotifications(ids) {
         var values = Array.isArray(ids) ? ids : [];
-        for (var i = 0; i < values.length; i++)
+        for (var i = values.length - 1; i >= 0; i--)
             restoreHiddenNotification(values[i]);
     }
 

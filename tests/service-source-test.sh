@@ -50,8 +50,12 @@ assert_contains $'if (confirmed !== prepareMarkAllNotificationsRead()) {\n      
   "bulk marking does not verify the confirmed snapshot"
 assert_contains $'var commandLine = [helperPath(), "--mark-all-read-before", String(snapshot.boundary || "")];\n        for (var i = 0; i < snapshot.boundaryIds.length; i++)\n            commandLine.push("--mark-boundary-notification", String(snapshot.boundaryIds[i]));' \
   "bulk marking does not protect same-second arrivals"
-assert_contains $'function hideAllNotifications() {\n        var ids = [];\n        for (var i = 0; i < notifications.length; i++) {' \
-  "bulk marking does not immediately clear its displayed notifications"
+assert_contains $'function hideAllNotifications() {\n        var ids = [];\n        var hidden = copyMap(hiddenNotifications);\n        var remaining = [];\n        for (var i = 0; i < notifications.length; i++) {' \
+  "bulk marking does not batch its optimistic removal"
+assert_contains $'hiddenNotifications = hidden;\n            notifications = remaining;\n            notificationsRevision++;' \
+  "bulk marking repeatedly updates the notification model"
+assert_contains $'function restoreHiddenNotifications(ids) {\n        var values = Array.isArray(ids) ? ids : [];\n        for (var i = values.length - 1; i >= 0; i--)' \
+  "failed bulk marking does not preserve notification order"
 assert_contains $'markingAllNotifications = true;\n        markingAllNotificationIds = hideAllNotifications();\n        notificationActionStatus = "Marking all notifications read…";' \
   "bulk marking does not provide immediate visible feedback"
 assert_contains $'if (all)\n                    root.restoreHiddenNotifications(root.markingAllNotificationIds);\n                else if (markedId !== "")' \
