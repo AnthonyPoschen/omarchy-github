@@ -50,6 +50,12 @@ assert_contains $'if (confirmed !== prepareMarkAllNotificationsRead()) {\n      
   "bulk marking does not verify the confirmed snapshot"
 assert_contains $'var commandLine = [helperPath(), "--mark-all-read-before", String(snapshot.boundary || "")];\n        for (var i = 0; i < snapshot.boundaryIds.length; i++)\n            commandLine.push("--mark-boundary-notification", String(snapshot.boundaryIds[i]));' \
   "bulk marking does not protect same-second arrivals"
+assert_contains $'function hideAllNotifications() {\n        var ids = [];\n        for (var i = 0; i < notifications.length; i++) {' \
+  "bulk marking does not immediately clear its displayed notifications"
+assert_contains $'markingAllNotifications = true;\n        markingAllNotificationIds = hideAllNotifications();\n        notificationActionStatus = "Marking all notifications read…";' \
+  "bulk marking does not provide immediate visible feedback"
+assert_contains $'if (all)\n                    root.restoreHiddenNotifications(root.markingAllNotificationIds);\n                else if (markedId !== "")' \
+  "failed bulk marking does not restore its displayed notifications"
 assert_contains $'// GitHub is authoritative after every attempt. This reconciles\n            // successful, failed, and partially completed bulk operations.\n            root.refreshQueued = false;\n            Qt.callLater(root.refresh);' \
   "notification marking does not reconcile every result with an authoritative refresh"
 assert_not_contains 'root.notifications = root.notifications.filter' \
