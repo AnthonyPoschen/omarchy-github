@@ -1214,8 +1214,8 @@ Panel {
         implicitWidth: readAction.size
         implicitHeight: readAction.size
         radius: Style.cornerRadius
-        color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.14)
-        borderSpec: Border.flat(Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.42), 1)
+        color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.06)
+        borderSpec: Border.flat(Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.16), 1)
 
         PanelActionButton {
           id: readAction
