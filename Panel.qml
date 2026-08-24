@@ -1063,6 +1063,7 @@ Panel {
         onClicked: section.toggleExpanded()
       }
       Button {
+        id: previousPageButton
         visible: sectionFooter.paginated
         text: "󰅁"
         tooltipText: "Previous notifications"
@@ -1077,6 +1078,7 @@ Panel {
       Text {
         visible: sectionFooter.paginated
         text: (section.page + 1) + " / " + section.pageCount
+        height: previousPageButton.height
         color: root.dim
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption

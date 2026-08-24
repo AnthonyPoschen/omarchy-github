@@ -69,6 +69,8 @@ assert_contains $'text: "󰅁"\n        tooltipText: "Previous notifications"' \
   "previous notification page control is missing"
 assert_contains $'text: "󰅂"\n        tooltipText: "Next notifications"' \
   "next notification page control is missing"
+assert_contains $'text: (section.page + 1) + " / " + section.pageCount\n        height: previousPageButton.height\n        color: root.dim' \
+  "notification page number is not vertically centered with its controls"
 
 assert_contains $'function applyPanelWheel(event) {\n    if (!panelFlick || (sortPicker && sortPicker.popup.visible)) return false' \
   "the panel still uses Flickable's default wheel distance"
