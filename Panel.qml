@@ -1178,7 +1178,7 @@ Panel {
       anchors.right: parent.right
       anchors.verticalCenter: parent.verticalCenter
       anchors.leftMargin: Style.space(9)
-      anchors.rightMargin: Style.space(9)
+      anchors.rightMargin: linkRow.showReadAction ? 0 : Style.space(9)
       spacing: Style.space(9)
       Text {
         text: linkRow.glyph
@@ -1219,23 +1219,30 @@ Panel {
         visible: linkRow.showReadAction
         Layout.alignment: Qt.AlignVCenter
         Layout.fillHeight: true
-        implicitWidth: readAction.size
-        implicitHeight: readAction.size
-        radius: Style.cornerRadius
+        implicitWidth: Style.space(32)
+        implicitHeight: Style.space(32)
+        radius: 0
         color: "transparent"
-        borderSpec: Border.flat(Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.16), 1)
+        borderSpec: Border.none()
+
+        Rectangle {
+          anchors.left: parent.left
+          anchors.top: parent.top
+          anchors.bottom: parent.bottom
+          width: Style.normalBorderWidth
+          color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.16)
+        }
 
         PanelActionButton {
           id: readAction
-          anchors.centerIn: parent
+          anchors.fill: parent
           enabled: github.markingNotificationId !== linkRow.notificationId
           iconText: github.markingNotificationId === linkRow.notificationId ? "󰑐" : "󰄬"
           tooltipText: "Mark this notification read (M)"
           foreground: root.foreground
           hoverColor: Color.accent
           fontFamily: root.fontFamily
-          size: Math.max(Style.space(32), fontSize + Style.spacing.sm * 2)
-          bordered: true
+          bordered: false
           onClicked: github.markNotificationRead(linkRow.notificationId)
         }
       }
